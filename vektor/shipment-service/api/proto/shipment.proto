@@ -1,0 +1,83 @@
+syntax = "proto3";
+package shipment.v1;
+option go_package = "shipment-service/api/proto/shipmentpb";
+import "google/protobuf/timestamp.proto";
+
+service ShipmentService {
+  rpc CreateShipment(CreateShipmentRequest) returns (CreateShipmentResponse);
+  rpc GetShipment(GetShipmentRequest) returns (GetShipmentResponse);
+  rpc AddShipmentEvent(AddShipmentEventRequest) returns (AddShipmentEventResponse);
+  rpc ListShipmentEvents(ListShipmentEventsRequest) returns (ListShipmentEventsResponse);
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_PENDING = 1;
+  STATUS_PICKED_UP = 2;
+  STATUS_IN_TRANSIT = 3;
+  STATUS_DELIVERED = 4;
+  STATUS_CANCELLED = 5;
+}
+
+message Shipment {
+  string id = 1;
+  string reference_number = 2;
+  string origin = 3;
+  string destination = 4;
+  string driver_name = 5;
+  string vehicle_id = 6;
+  double amount = 7;
+  double driver_revenue = 8;
+  Status current_status = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ShipmentEvent {
+  string id = 1;
+  string shipment_id = 2;
+  Status status = 3;
+  string note = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+}
+
+message CreateShipmentRequest {
+  string reference_number = 1;
+  string origin = 2;
+  string destination = 3;
+  string driver_name = 4;
+  string vehicle_id = 5;
+  double amount = 6;
+  double driver_revenue = 7;
+}
+
+message CreateShipmentResponse {
+  Shipment shipment = 1;
+}
+
+message GetShipmentRequest {
+  string id = 1;
+}
+
+message GetShipmentResponse {
+  Shipment shipment = 1;
+}
+
+message AddShipmentEventRequest {
+  string shipment_id = 1;
+  Status status = 2;
+  string note = 3;
+}
+
+message AddShipmentEventResponse {
+  ShipmentEvent event = 1;
+  Shipment shipment = 2;
+}
+
+message ListShipmentEventsRequest {
+  string shipment_id = 1;
+}
+
+message ListShipmentEventsResponse {
+  repeated ShipmentEvent events = 1;
+}
