@@ -9,11 +9,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/config"
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
-	mw "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/middleware"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/service"
+	"github.com/ninosh210804/lumiera/apps/server/internal/config"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
+	mw "github.com/ninosh210804/lumiera/apps/server/internal/middleware"
+	"github.com/ninosh210804/lumiera/apps/server/internal/service"
 )
 
 type healthResponse struct {

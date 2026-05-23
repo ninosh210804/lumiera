@@ -7,9 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
-	mw "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/middleware"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/service"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
+	mw "github.com/ninosh210804/lumiera/apps/server/internal/middleware"
+	"github.com/ninosh210804/lumiera/apps/server/internal/service"
 )
 
 type usersHandler struct {

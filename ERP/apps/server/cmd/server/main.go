@@ -14,11 +14,11 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/accounting"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/config"
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/eventbus"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/handler"
+	"github.com/ninosh210804/lumiera/apps/server/internal/accounting"
+	"github.com/ninosh210804/lumiera/apps/server/internal/config"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
+	"github.com/ninosh210804/lumiera/apps/server/internal/eventbus"
+	"github.com/ninosh210804/lumiera/apps/server/internal/handler"
 )
 
 func main() {

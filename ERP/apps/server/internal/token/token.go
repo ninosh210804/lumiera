@@ -7,7 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
 )
 
 type claims struct {

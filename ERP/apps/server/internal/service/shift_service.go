@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
 )
 
 type ShiftService struct {

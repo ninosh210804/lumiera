@@ -159,4 +159,4 @@ sequenceDiagram
 5. **Kaspi QR**: интеграция через Kaspi API или просто фиксация факта
    оплаты вручную бариста? (API требует договор с банком.)
 6. **Авто-обновление десктопа**: Tauri Updater подписывает артефакты —
-   нужен ли self-signed ключ или будем без подписи (как Windows SmartScreen)?
+   нужен ли self-signed ключ или будем без подписи (как Windows SmartScreen) g?

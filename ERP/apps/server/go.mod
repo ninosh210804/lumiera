@@ -1,4 +1,4 @@
-module github.com/ninosh210804/coffeeshop-erp/apps/server
+module github.com/ninosh210804/lumiera/apps/server
 
 go 1.25.0
 

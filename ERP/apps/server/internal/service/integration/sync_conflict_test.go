@@ -19,8 +19,8 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/service"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
+	"github.com/ninosh210804/lumiera/apps/server/internal/service"
 )
 
 func migrationsPath() string {

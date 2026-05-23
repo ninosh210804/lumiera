@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/config"
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/token"
+	"github.com/ninosh210804/lumiera/apps/server/internal/config"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
+	"github.com/ninosh210804/lumiera/apps/server/internal/token"
 )
 
 // AuthService handles authentication and user management.

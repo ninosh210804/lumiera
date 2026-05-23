@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/token"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
+	"github.com/ninosh210804/lumiera/apps/server/internal/token"
 )
 
 type contextKey string

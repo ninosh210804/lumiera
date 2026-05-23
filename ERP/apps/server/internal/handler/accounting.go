@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/accounting"
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
-	mw "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/middleware"
+	"github.com/ninosh210804/lumiera/apps/server/internal/accounting"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
+	mw "github.com/ninosh210804/lumiera/apps/server/internal/middleware"
 )
 
 // AccountingServicer is the surface the handler needs.

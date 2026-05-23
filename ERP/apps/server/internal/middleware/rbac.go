@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
 )
 
 // RequireAuth rejects unauthenticated requests (no valid claims in context).

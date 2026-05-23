@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	pgdb "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/db/postgres/generated"
+	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
 )
 
 type SyncService struct {

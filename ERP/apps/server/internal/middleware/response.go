@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/domain"
+	"github.com/ninosh210804/lumiera/apps/server/internal/domain"
 )
 
 type envelope struct {

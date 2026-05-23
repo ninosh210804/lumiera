@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	mw "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/middleware"
-	"github.com/ninosh210804/coffeeshop-erp/apps/server/internal/service"
+	mw "github.com/ninosh210804/lumiera/apps/server/internal/middleware"
+	"github.com/ninosh210804/lumiera/apps/server/internal/service"
 )
 
 type syncHandler struct {
