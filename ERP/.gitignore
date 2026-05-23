@@ -11,8 +11,6 @@ build/
 apps/server/bin/
 apps/server/tmp/
 apps/server/coverage.out
-apps/server/internal/db/postgres/generated/
-apps/server/internal/db/sqlite/generated/
 *.exe
 *.dll
 *.so
