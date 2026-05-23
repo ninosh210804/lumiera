@@ -3,5 +3,5 @@ packages:
   - "apps/desktop"
   - "apps/mobile"
   - "packages/*"
-allowedBuilds:
+onlyBuiltDependencies:
   - esbuild
