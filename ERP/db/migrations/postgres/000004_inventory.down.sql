@@ -1,0 +1,11 @@
+ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS fk_stock_movements_count;
+ALTER TABLE modifier_options DROP CONSTRAINT IF EXISTS fk_modifier_options_ingredient;
+ALTER TABLE stock_batches DROP CONSTRAINT IF EXISTS fk_stock_batches_poi;
+DROP TABLE IF EXISTS inventory_count_items;
+DROP TABLE IF EXISTS inventory_counts;
+DROP TABLE IF EXISTS stock_movements;
+DROP TABLE IF EXISTS purchase_order_items;
+DROP TABLE IF EXISTS purchase_orders;
+DROP TABLE IF EXISTS stock_batches;
+DROP TABLE IF EXISTS ingredients;
+DROP TABLE IF EXISTS suppliers;

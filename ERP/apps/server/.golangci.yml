@@ -1,0 +1,46 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gocritic
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - noctx
+    - bodyclose
+    - sqlclosecheck
+
+linters-settings:
+  gosec:
+    excludes:
+      - G115  # integer overflow (false positives with port numbers)
+  goimports:
+    local-prefixes: github.com/ninosh210804/coffeeshop-erp
+  depguard:
+    rules:
+      accounting-isolation:
+        list-mode: lax
+        deny:
+          - pkg: "github.com/ninosh210804/coffeeshop-erp/apps/server/internal/accounting"
+            desc: "accounting is an isolated module; only cmd/server/main.go may import it"
+        files:
+          - "!**/cmd/server/main.go"
+          - "!**/internal/accounting/**"
+
+issues:
+  exclude-rules:
+    - path: "_test.go"
+      linters:
+        - gosec
+        - errcheck
+  max-issues-per-linter: 0
+  max-same-issues: 0

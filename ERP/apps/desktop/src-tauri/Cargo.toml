@@ -1,0 +1,27 @@
+[package]
+name = "coffeeshop-erp"
+version = "1.0.0"
+description = "Coffeeshop ERP — offline-first POS"
+authors = []
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.70"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.6", features = [
+  "notification-all",
+  "shell-open",
+  "http-all",
+  "system-tray"
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+# Keep the custom-protocol feature if you don't use a dev server
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

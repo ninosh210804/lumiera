@@ -1,0 +1,64 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+.next/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Go
+apps/server/bin/
+apps/server/tmp/
+apps/server/coverage.out
+apps/server/internal/db/postgres/generated/
+apps/server/internal/db/sqlite/generated/
+*.exe
+*.dll
+*.so
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+local.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Secrets / certs
+*.pem
+*.key
+*.crt
+
+# Tauri / Rust
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/
+
+# Android
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+
+# IDE
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Release artifacts
+release/
+*.zip
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,3 @@
+ALTER TABLE products DROP COLUMN IF EXISTS recipe_id;
+DROP TABLE IF EXISTS recipe_items;
+DROP TABLE IF EXISTS recipes;

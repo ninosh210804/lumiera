@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Go Backend ─────────────────────────────────────────────────────────────
+  go:
+    name: Go (lint + test + build)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: coffeeshop_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/coffeeshop_test?sslmode=disable
+      JWT_SECRET: test_secret_for_ci_at_least_32_chars_long
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: apps/server/go.sum
+
+      - name: Install migrate
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+      - name: Run PostgreSQL migrations
+        working-directory: apps/server
+        run: make migrate-up
+
+      - name: Run tests
+        working-directory: apps/server
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: apps/server
+          version: latest
+
+      - name: Build server
+        working-directory: apps/server
+        run: CGO_ENABLED=0 go build -o /dev/null ./cmd/server
+
+  # ─── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (lint + typecheck + test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm turbo run typecheck
+
+      - name: Lint
+        run: pnpm turbo run lint
+
+      - name: Build
+        run: pnpm turbo run build
+
+  # ─── Deploy preview (web) ───────────────────────────────────────────────────
+  # Vercel handles preview deploys automatically via the Vercel GitHub integration.
+  # No explicit step needed here.

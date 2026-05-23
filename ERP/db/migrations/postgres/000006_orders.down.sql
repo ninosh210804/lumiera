@@ -1,0 +1,12 @@
+ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS fk_stock_movements_order;
+DROP TABLE IF EXISTS loyalty_transactions;
+DROP TABLE IF EXISTS refunds;
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS order_item_modifiers;
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS shifts;
+DROP TABLE IF EXISTS loyalty_rules;
+DROP TABLE IF EXISTS loyalty_accounts;
+DROP TABLE IF EXISTS customers;
+DROP TABLE IF EXISTS payment_methods;
