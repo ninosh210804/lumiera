@@ -24,6 +24,9 @@
     "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@11.1.2",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": ["eslint --fix", "prettier --write"],
     "*.{json,md,yaml,yml}": ["prettier --write"]
