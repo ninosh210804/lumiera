@@ -41,18 +41,48 @@ func Run(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
 	return nil
 }
 
-// applyMigrationsIfNeeded runs every embedded *.up.sql in order, but only if
-// the schema has not been created yet (detected by the absence of the users
-// table). A DB already migrated by `make migrate-up` is left untouched.
+// legacyBaseline is the highest migration version that existed before this
+// incremental ledger was introduced. On a DB that was already provisioned by
+// the old all-or-nothing bootstrap, migrations up to and including this version
+// are assumed applied and are recorded (not re-run). Migrations after it must
+// therefore be idempotent, since they may run on a long-lived production DB.
+const legacyBaseline = "000012"
+
+// applyMigrationsIfNeeded applies any embedded *.up.sql migrations that have not
+// yet been recorded in the bootstrap_migrations ledger. It handles three cases:
+//   - fresh DB (no schema): apply every migration in order
+//   - pre-ledger DB (schema present, empty ledger): record the baseline as
+//     applied, then apply anything newer
+//   - normal: apply only unrecorded migrations
 func applyMigrationsIfNeeded(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
+	if _, err := pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS bootstrap_migrations (
+			version    TEXT PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`); err != nil {
+		return fmt.Errorf("create migration ledger: %w", err)
+	}
+
 	var usersTable *string
 	if err := pool.QueryRow(ctx, `SELECT to_regclass('public.users')`).Scan(&usersTable); err != nil {
 		return fmt.Errorf("schema probe: %w", err)
 	}
-	if usersTable != nil {
-		logger.Info("bootstrap: schema already present, skipping migrations")
-		return nil
+	schemaExists := usersTable != nil
+
+	applied := map[string]bool{}
+	rows, err := pool.Query(ctx, `SELECT version FROM bootstrap_migrations`)
+	if err != nil {
+		return fmt.Errorf("read ledger: %w", err)
 	}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan ledger: %w", err)
+		}
+		applied[v] = true
+	}
+	rows.Close()
 
 	entries, err := migrationFS.ReadDir("sql")
 	if err != nil {
@@ -66,8 +96,26 @@ func applyMigrationsIfNeeded(ctx context.Context, pool *pgxpool.Pool, logger *sl
 	}
 	sort.Strings(names)
 
-	logger.Info("bootstrap: schema missing, applying migrations", "count", len(names))
+	// Pre-ledger DB: adopt the legacy baseline as already-applied.
+	if schemaExists && len(applied) == 0 {
+		for _, name := range names {
+			v := migrationVersion(name)
+			if v <= legacyBaseline {
+				if _, err := pool.Exec(ctx,
+					`INSERT INTO bootstrap_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, v); err != nil {
+					return fmt.Errorf("seed baseline %s: %w", v, err)
+				}
+				applied[v] = true
+			}
+		}
+		logger.Info("bootstrap: adopted legacy migration baseline", "through", legacyBaseline)
+	}
+
 	for _, name := range names {
+		v := migrationVersion(name)
+		if applied[v] {
+			continue
+		}
 		sqlBytes, err := migrationFS.ReadFile("sql/" + name)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
@@ -75,9 +123,21 @@ func applyMigrationsIfNeeded(ctx context.Context, pool *pgxpool.Pool, logger *sl
 		if _, err := pool.Exec(ctx, string(sqlBytes)); err != nil {
 			return fmt.Errorf("apply %s: %w", name, err)
 		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO bootstrap_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING`, v); err != nil {
+			return fmt.Errorf("record %s: %w", v, err)
+		}
 		logger.Info("bootstrap: migration applied", "file", name)
 	}
 	return nil
+}
+
+// migrationVersion extracts the numeric prefix, e.g. "000013_loyalty.up.sql" -> "000013".
+func migrationVersion(name string) string {
+	if i := strings.IndexByte(name, '_'); i > 0 {
+		return name[:i]
+	}
+	return name
 }
 
 // ensureAdmin creates the default admin user if no account with its email
