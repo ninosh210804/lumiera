@@ -15,7 +15,8 @@ type authHandler struct {
 }
 
 // --- POST /api/v1/auth/login ---
-// Admin / manager: { "email": "...", "pin": "1234" }
+// All users (admin, manager, barista): { "email": "...", "pin": "1234" }
+// Note: Email-based login works for barista if email is set on their account.
 
 type loginEmailRequest struct {
 	Email string `json:"email"`

@@ -42,7 +42,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">☕</div>
           <h1 className="text-2xl font-bold text-brand">Coffeeshop ERP</h1>
-          <p className="text-gray-400 text-sm mt-1">Войдите в систему</p>
+          <p className="text-gray-400 text-sm mt-1">Вход по email и PIN-коду</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

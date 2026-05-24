@@ -285,25 +285,20 @@ export default function SettingsPage() {
               </select>
             </div>
 
-            {/* Email (optional, shown only for admin/manager) */}
-            {(() => {
-              const selectedRole = roles.find((r) => r.id === form.role_id);
-              return selectedRole?.code !== "barista" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                    <span className="text-gray-400 font-normal ml-1">(для входа по email)</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                    placeholder="email@coffeeshop.kz"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                  />
-                </div>
-              );
-            })()}
+            {/* Email (optional for all roles) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+                <span className="text-gray-400 font-normal ml-1">(для входа по email+PIN)</span>
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="email@coffeeshop.kz"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+              />
+            </div>
 
             {/* PIN */}
             <div className="grid grid-cols-2 gap-3">
@@ -368,12 +363,11 @@ export default function SettingsPage() {
                 }
                 onClick={() => {
                   setFormError("");
-                  const selectedRole = roles.find((r) => r.id === form.role_id);
                   createMutation.mutate({
                     location_id: locationId,
                     role_id: form.role_id,
                     full_name: form.full_name,
-                    email: selectedRole?.code !== "barista" && form.email ? form.email : undefined,
+                    email: form.email || undefined,
                     pin: form.pin,
                   });
                 }}
