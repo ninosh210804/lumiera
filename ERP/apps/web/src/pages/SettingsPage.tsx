@@ -192,6 +192,9 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Loyalty / promo */}
+      <LoyaltyPromoCard canEdit={user?.role === "admin" || user?.role === "manager"} />
+
       {/* System info card */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Система</h2>
@@ -382,6 +385,90 @@ export default function SettingsPage() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+interface LoyaltyConfig {
+  promo_active: boolean;
+  promo_percent: number;
+  every_n: number;
+  free_category: string;
+}
+
+function LoyaltyPromoCard({ canEdit }: { canEdit: boolean }) {
+  const qc = useQueryClient();
+  const { data: cfg } = useQuery<LoyaltyConfig>({
+    queryKey: ["loyalty-config"],
+    queryFn: () => api.get("/loyalty/config").then((r) => r.data.data),
+  });
+  const [percent, setPercent] = useState<string>("");
+
+  const setPromo = useMutation({
+    mutationFn: (body: { active: boolean; percent: number }) => api.post("/loyalty/promo", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["loyalty-config"] }),
+  });
+
+  const pct = percent !== "" ? Number(percent) : cfg?.promo_percent ?? 10;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-6">
+      <h2 className="text-sm font-semibold text-gray-700 mb-4">Акции и бонусы</h2>
+      <div className="space-y-4 text-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-gray-800">Скидка на всё</p>
+            <p className="text-xs text-gray-400">
+              Применяется ко всем заказам, пока акция включена
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={percent !== "" ? percent : cfg?.promo_percent ?? ""}
+              onChange={(e) => setPercent(e.target.value)}
+              disabled={!canEdit}
+              className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right disabled:bg-gray-50"
+            />
+            <span className="text-gray-400">%</span>
+            <button
+              onClick={() => setPromo.mutate({ active: !cfg?.promo_active, percent: pct })}
+              disabled={!canEdit || setPromo.isPending}
+              className={[
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50",
+                cfg?.promo_active
+                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200",
+              ].join(" ")}
+            >
+              {cfg?.promo_active ? "ВКЛ" : "ВЫКЛ"}
+            </button>
+          </div>
+        </div>
+
+        {canEdit && percent !== "" && Number(percent) !== (cfg?.promo_percent ?? 10) && (
+          <button
+            onClick={() => setPromo.mutate({ active: cfg?.promo_active ?? false, percent: pct })}
+            className="text-xs font-semibold text-brand hover:underline"
+          >
+            Сохранить {pct}%
+          </button>
+        )}
+
+        <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+          <div>
+            <p className="font-medium text-gray-800">Каждый N-й кофе бесплатно</p>
+            <p className="text-xs text-gray-400">
+              По номеру телефона клиента · категория «{cfg?.free_category ?? "Кофе"}»
+            </p>
+          </div>
+          <span className="bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-semibold">
+            каждый {cfg?.every_n ?? 7}-й
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+
+interface QuoteDTO {
+  subtotal: number;
+  promo_discount: number;
+  free_coffee_discount: number;
+  free_coffees_applied: number;
+  discount_total: number;
+  loyalty_points_used: number;
+  total: number;
+  promo_active: boolean;
+  promo_percent: number;
+  customer_found: boolean;
+  points_balance: number;
+  free_drinks_left: number;
+}
 
 interface ProductDTO {
   id: string;
@@ -113,8 +128,35 @@ export default function POSPage() {
     },
   });
 
+  // Debounce phone so we don't fire a quote on every keystroke.
+  const [debouncedPhone, setDebouncedPhone] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPhone(customerPhone), 350);
+    return () => clearTimeout(t);
+  }, [customerPhone]);
+
   const subtotal = cart.reduce((s, item) => s + item.line_total, 0);
-  const total = subtotal;
+
+  // Authoritative price breakdown from the server (applies promo + loyalty).
+  const quoteItems = cart.map((i) => ({
+    product_id: i.product_id,
+    qty: i.qty,
+    modifier_option_ids: [] as string[],
+  }));
+  const { data: quote } = useQuery<QuoteDTO>({
+    queryKey: ["order-quote", quoteItems, debouncedPhone],
+    queryFn: () =>
+      api
+        .post("/orders/quote", {
+          items: quoteItems,
+          customer_phone: debouncedPhone,
+          loyalty_points_to_use: 0,
+        })
+        .then((r) => r.data.data),
+    enabled: cart.length > 0 || debouncedPhone.length >= 4,
+  });
+
+  const total = quote?.total ?? subtotal;
 
   const addToCart = (product: ProductDTO) => {
     if (product.is_stop_listed || !product.is_active) {
@@ -317,14 +359,41 @@ export default function POSPage() {
             placeholder="+7 (700) 000-0000"
             className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 text-sm"
           />
+          {quote?.customer_found && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <span className="bg-amber-500/15 text-amber-300 px-2 py-1 rounded-md font-medium">
+                ☕ Бесплатных: {quote.free_drinks_left}
+              </span>
+              <span className="bg-sky-500/15 text-sky-300 px-2 py-1 rounded-md font-medium">
+                ★ Баллы: {quote.points_balance.toLocaleString("ru-RU")}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Totals */}
         <div className="border-t border-gray-700 p-4 space-y-2">
+          {quote?.promo_active && (
+            <div className="bg-emerald-500/15 text-emerald-300 text-xs font-semibold px-2.5 py-1.5 rounded-md text-center">
+              🎉 Акция −{quote.promo_percent}% на всё
+            </div>
+          )}
           <div className="flex justify-between text-gray-300">
             <span>Товары:</span>
             <span>{subtotal.toLocaleString("ru-RU")} ₸</span>
           </div>
+          {!!quote && quote.free_coffee_discount > 0 && (
+            <div className="flex justify-between text-amber-300">
+              <span>Бесплатный кофе ×{quote.free_coffees_applied}:</span>
+              <span>−{quote.free_coffee_discount.toLocaleString("ru-RU")} ₸</span>
+            </div>
+          )}
+          {!!quote && quote.promo_discount > 0 && (
+            <div className="flex justify-between text-emerald-300">
+              <span>Скидка −{quote.promo_percent}%:</span>
+              <span>−{quote.promo_discount.toLocaleString("ru-RU")} ₸</span>
+            </div>
+          )}
           <div className="border-t border-gray-600 pt-2 flex justify-between text-lg font-bold text-white">
             <span>ИТОГО:</span>
             <span className="text-emerald-400">{total.toLocaleString("ru-RU")} ₸</span>

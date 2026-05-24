@@ -184,6 +184,7 @@ type LoyaltyAccount struct {
 	TotalVisits    int32              `db:"total_visits" json:"total_visits"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	CoffeePunches  int32              `db:"coffee_punches" json:"coffee_punches"`
 }
 
 type LoyaltyRule struct {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -145,20 +146,35 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		return nil, err
 	}
 
+	type ingredientDeduction struct {
+		ingredientID uuid.UUID
+		qtyDelta     float64 // negative = consumed from stock
+		costSnapshot float64
+	}
+
 	type calcItem struct {
 		productID   uuid.UUID
 		productName string
 		qty         float64
 		unitPrice   float64
 		lineTotal   float64
+		lineCost    float64
 		clientUUID  uuid.UUID
 		modIDs      []uuid.UUID
 		modDeltas   []float64
 		modNames    []string
+		deductions  []ingredientDeduction
+	}
+
+	cfg, err := loadLoyaltyConfig(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("load loyalty config: %w", err)
 	}
 
 	var calcItems []calcItem
 	var subtotal float64
+	var costTotal float64
+	var coffeeUnitPrices []float64
 
 	for _, item := range in.Items {
 		prod, err := q.GetProduct(ctx, pgtype.UUID{Bytes: item.ProductID, Valid: true})
@@ -189,58 +205,78 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 
 		lineTotal := math.Round(unitPrice*item.Qty*100) / 100
 		subtotal += lineTotal
+
+		// Track per-unit prices of qualifying drinks for the free-Nth-coffee rule.
+		if prod.CategoryName == cfg.FreeCategory {
+			for n := 0; n < int(item.Qty); n++ {
+				coffeeUnitPrices = append(coffeeUnitPrices, unitPrice)
+			}
+		}
+
 		itemUUID := item.ClientUUID
 		if itemUUID == (uuid.UUID{}) {
 			itemUUID = uuid.New()
 		}
+
+		// Expand the product's recipe into ingredient stock deductions (if linked).
+		var deductions []ingredientDeduction
+		var lineCost float64
+		if prod.RecipeID.Valid {
+			recipeItems, err := q.GetRecipeItems(ctx, prod.RecipeID)
+			if err != nil {
+				return nil, fmt.Errorf("get recipe items: %w", err)
+			}
+			for _, ri := range recipeItems {
+				if !ri.IngredientID.Valid {
+					continue // sub-recipe expansion not handled yet; skip
+				}
+				perUnit := floatFromNumeric(ri.Qty)
+				avgCost := floatFromNumeric(ri.CurrentAvgCost)
+				consumed := perUnit * item.Qty
+				lineCost += consumed * avgCost
+				deductions = append(deductions, ingredientDeduction{
+					ingredientID: uuid.UUID(ri.IngredientID.Bytes),
+					qtyDelta:     -consumed,
+					costSnapshot: avgCost,
+				})
+			}
+			lineCost = math.Round(lineCost*100) / 100
+			costTotal += lineCost
+		}
+
 		calcItems = append(calcItems, calcItem{
 			productID:   item.ProductID,
 			productName: prod.Name,
 			qty:         item.Qty,
 			unitPrice:   unitPrice,
 			lineTotal:   lineTotal,
+			lineCost:    lineCost,
 			clientUUID:  itemUUID,
 			modIDs:      item.ModifierOptionIDs,
 			modDeltas:   modDeltas,
 			modNames:    modNames,
+			deductions:  deductions,
 		})
 	}
 
 	var (
 		customerID       pgtype.UUID
 		loyaltyAccountID pgtype.UUID
-		loyaltyPointsUsed float64
+		custState        loyaltyState
 	)
-
 	if in.CustomerPhone != "" {
-		custID, loyAcctID, loyBalance, err := getOrCreateCustomer(ctx, q, in.CustomerPhone)
+		custID, loyAcctID, st, err := getOrCreateCustomer(ctx, q, in.CustomerPhone)
 		if err != nil {
 			return nil, err
 		}
 		customerID = pgtype.UUID{Bytes: custID, Valid: true}
 		loyaltyAccountID = pgtype.UUID{Bytes: loyAcctID, Valid: true}
-
-		if in.LoyaltyPointsToUse > 0 {
-			pts := math.Min(in.LoyaltyPointsToUse, loyBalance)
-			pts = math.Min(pts, subtotal)
-			pts = math.Round(pts*100) / 100
-			if pts > 0 {
-				_, err := q.DeductLoyaltyPoints(ctx, pgdb.DeductLoyaltyPointsParams{
-					CustomerID:    customerID,
-					PointsBalance: numericFromFloat(pts),
-				})
-				if err != nil {
-					if errors.Is(err, pgx.ErrNoRows) {
-						return nil, domain.NewBadRequest("insufficient loyalty points")
-					}
-					return nil, fmt.Errorf("deduct loyalty: %w", err)
-				}
-				loyaltyPointsUsed = pts
-			}
-		}
+		custState = st
 	}
 
-	total := math.Round((subtotal-loyaltyPointsUsed)*100) / 100
+	disc := computeDiscounts(subtotal, coffeeUnitPrices, custState, cfg, in.LoyaltyPointsToUse)
+	loyaltyPointsUsed := disc.PointsUsed
+	total := disc.Total
 
 	var paymentSum float64
 	for _, p := range in.Payments {
@@ -274,10 +310,10 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		BaristaID:         pgtype.UUID{Bytes: in.BaristaID, Valid: true},
 		CustomerID:        customerID,
 		Subtotal:          numericFromFloat(subtotal),
-		DiscountTotal:     numericFromFloat(0),
+		DiscountTotal:     numericFromFloat(disc.DiscountTotal),
 		LoyaltyPointsUsed: numericFromFloat(loyaltyPointsUsed),
 		Total:             numericFromFloat(total),
-		CostTotal:         numericFromFloat(0),
+		CostTotal:         numericFromFloat(costTotal),
 		ReceiptNo:         receiptNo,
 		ClientUuid:        pgtype.UUID{Bytes: clientUUID, Valid: true},
 	})
@@ -294,13 +330,30 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 			Qty:               numericFromFloat(ci.qty),
 			UnitPriceSnapshot: numericFromFloat(ci.unitPrice),
 			LineTotal:         numericFromFloat(ci.lineTotal),
-			LineCost:          numericFromFloat(0),
+			LineCost:          numericFromFloat(ci.lineCost),
 			ClientUuid:        pgtype.UUID{Bytes: ci.clientUUID, Valid: true},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("create order item: %w", err)
 		}
 		itemID := pgtype.UUID{Bytes: uuid.UUID(oi.ID.Bytes), Valid: true}
+
+		// Deduct ingredient stock for this line (recipe-driven consumption).
+		for _, d := range ci.deductions {
+			saleReason := "sale"
+			if _, err := q.CreateStockMovement(ctx, pgdb.CreateStockMovementParams{
+				LocationID:       pgtype.UUID{Bytes: in.LocationID, Valid: true},
+				IngredientID:     pgtype.UUID{Bytes: d.ingredientID, Valid: true},
+				QtyDelta:         numericFromFloat(d.qtyDelta),
+				UnitCostSnapshot: numericFromFloat(d.costSnapshot),
+				Reason:           saleReason,
+				OrderID:          orderID,
+				ClientUuid:       pgtype.UUID{Bytes: uuid.New(), Valid: true},
+				CreatedBy:        pgtype.UUID{Bytes: in.BaristaID, Valid: true},
+			}); err != nil {
+				return nil, fmt.Errorf("deduct stock: %w", err)
+			}
+		}
 
 		var mods []OrderModifierDTO
 		for j, modID := range ci.modIDs {
@@ -364,23 +417,27 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 	}
 
 	loyaltyEarned := 0.0
-	if loyaltyAccountID.Valid && total > 0 {
-		earned := math.Round(total * 0.01)
-		if earned > 0 {
-			if _, err := q.AddLoyaltyPoints(ctx, pgdb.AddLoyaltyPointsParams{
-				CustomerID:    customerID,
-				PointsBalance: numericFromFloat(earned),
-				TotalVisits:   1,
-			}); err == nil {
-				note := fmt.Sprintf("Order %s", receiptNo)
-				_, _ = q.CreateLoyaltyTransaction(ctx, pgdb.CreateLoyaltyTransactionParams{
-					LoyaltyAccountID: loyaltyAccountID,
-					OrderID:          orderID,
-					Kind:             "earn",
-					PointsDelta:      numericFromFloat(earned),
-					Note:             &note,
-				})
-				loyaltyEarned = earned
+	if customerID.Valid {
+		// New balance = prior - redeemed + earned on the paid amount.
+		newBalance := custState.pointsBalance - disc.PointsUsed + disc.EarnedPoints
+		if newBalance < 0 {
+			newBalance = 0
+		}
+		if _, err := q.ApplyLoyaltyOrder(ctx, pgdb.ApplyLoyaltyOrderParams{
+			CustomerID:     customerID,
+			PointsBalance:  numericFromFloat(newBalance),
+			FreeDrinksLeft: int32(disc.NewFreeDrinksLeft),
+			CoffeePunches:  int32(disc.NewCoffeePunches),
+		}); err != nil {
+			return nil, fmt.Errorf("apply loyalty: %w", err)
+		}
+		loyaltyEarned = disc.EarnedPoints
+
+		if loyaltyAccountID.Valid {
+			recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "earn", disc.EarnedPoints, receiptNo)
+			recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "redeem", -disc.PointsUsed, receiptNo)
+			if disc.FreeCoffeesApplied > 0 {
+				recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "free_drink", 0, receiptNo)
 			}
 		}
 	}
@@ -394,6 +451,108 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 	dto.Payments = dtoPays
 	dto.LoyaltyEarned = loyaltyEarned
 	return &dto, nil
+}
+
+// ─── Quote ────────────────────────────────────────────────────────────────────
+
+type QuoteInput struct {
+	CustomerPhone      string
+	LoyaltyPointsToUse float64
+	Items              []OrderItemInput
+}
+
+// QuoteDTO is the price breakdown shown in POS before payment is taken.
+type QuoteDTO struct {
+	Subtotal           float64 `json:"subtotal"`
+	PromoDiscount      float64 `json:"promo_discount"`
+	FreeCoffeeDiscount float64 `json:"free_coffee_discount"`
+	FreeCoffeesApplied int     `json:"free_coffees_applied"`
+	DiscountTotal      float64 `json:"discount_total"`
+	LoyaltyPointsUsed  float64 `json:"loyalty_points_used"`
+	Total              float64 `json:"total"`
+	PromoActive        bool    `json:"promo_active"`
+	PromoPercent       float64 `json:"promo_percent"`
+	// Customer context (zero when no/new phone)
+	CustomerFound  bool    `json:"customer_found"`
+	PointsBalance  float64 `json:"points_balance"`
+	FreeDrinksLeft int     `json:"free_drinks_left"`
+}
+
+// Quote prices a prospective order without persisting anything. It mirrors the
+// pricing in CreateOrder so POS can collect the exact payable amount.
+func (svc *OrderService) Quote(ctx context.Context, in QuoteInput) (*QuoteDTO, error) {
+	cfg, err := loadLoyaltyConfig(ctx, svc.q)
+	if err != nil {
+		return nil, fmt.Errorf("load loyalty config: %w", err)
+	}
+
+	var subtotal float64
+	var coffeeUnitPrices []float64
+	for _, item := range in.Items {
+		prod, err := svc.q.GetProduct(ctx, pgtype.UUID{Bytes: item.ProductID, Valid: true})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, domain.NewNotFound("product")
+			}
+			return nil, fmt.Errorf("get product: %w", err)
+		}
+		unitPrice := floatFromNumeric(prod.BasePrice)
+		for _, modID := range item.ModifierOptionIDs {
+			mod, err := svc.q.GetModifierOption(ctx, pgtype.UUID{Bytes: modID, Valid: true})
+			if err != nil {
+				return nil, fmt.Errorf("get modifier option: %w", err)
+			}
+			unitPrice += floatFromNumeric(mod.PriceDelta)
+		}
+		subtotal += math.Round(unitPrice*item.Qty*100) / 100
+		if prod.CategoryName == cfg.FreeCategory {
+			for n := 0; n < int(item.Qty); n++ {
+				coffeeUnitPrices = append(coffeeUnitPrices, unitPrice)
+			}
+		}
+	}
+
+	var st loyaltyState
+	if in.CustomerPhone != "" {
+		st, err = lookupLoyalty(ctx, svc.q, in.CustomerPhone)
+		if err != nil {
+			return nil, fmt.Errorf("lookup loyalty: %w", err)
+		}
+	}
+
+	disc := computeDiscounts(subtotal, coffeeUnitPrices, st, cfg, in.LoyaltyPointsToUse)
+	return &QuoteDTO{
+		Subtotal:           round2(subtotal),
+		PromoDiscount:      disc.PromoDiscount,
+		FreeCoffeeDiscount: disc.FreeCoffeeDiscount,
+		FreeCoffeesApplied: disc.FreeCoffeesApplied,
+		DiscountTotal:      disc.DiscountTotal,
+		LoyaltyPointsUsed:  disc.PointsUsed,
+		Total:              disc.Total,
+		PromoActive:        cfg.PromoActive,
+		PromoPercent:       cfg.PromoPct,
+		CustomerFound:      st.found,
+		PointsBalance:      st.pointsBalance,
+		FreeDrinksLeft:     st.freeDrinksLeft,
+	}, nil
+}
+
+// LoyaltyConfig returns the effective loyalty configuration.
+func (svc *OrderService) LoyaltyConfig(ctx context.Context) (LoyaltyConfig, error) {
+	return loadLoyaltyConfig(ctx, svc.q)
+}
+
+// SetPromo toggles/sets the global percent-off promo.
+func (svc *OrderService) SetPromo(ctx context.Context, active bool, percent float64) (LoyaltyConfig, error) {
+	params, _ := json.Marshal(map[string]float64{"percent": percent})
+	if _, err := svc.q.SetLoyaltyRule(ctx, pgdb.SetLoyaltyRuleParams{
+		Code:     rulePromoDiscount,
+		Params:   params,
+		IsActive: active,
+	}); err != nil {
+		return LoyaltyConfig{}, fmt.Errorf("set promo: %w", err)
+	}
+	return loadLoyaltyConfig(ctx, svc.q)
 }
 
 // ─── Get ──────────────────────────────────────────────────────────────────────
@@ -652,15 +811,17 @@ func loadPaymentMethods(ctx context.Context, q *pgdb.Queries) (map[string]pmInfo
 	return result, nil
 }
 
-func getOrCreateCustomer(ctx context.Context, q *pgdb.Queries, phone string) (uuid.UUID, uuid.UUID, float64, error) {
+// getOrCreateCustomer ensures a customer + loyalty account exist for the phone
+// and returns the customer id, loyalty account id, and the account snapshot.
+func getOrCreateCustomer(ctx context.Context, q *pgdb.Queries, phone string) (uuid.UUID, uuid.UUID, loyaltyState, error) {
 	cust, err := q.GetCustomerByPhone(ctx, phone)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return uuid.UUID{}, uuid.UUID{}, 0, fmt.Errorf("get customer: %w", err)
+			return uuid.UUID{}, uuid.UUID{}, loyaltyState{}, fmt.Errorf("get customer: %w", err)
 		}
 		cust, err = q.CreateCustomer(ctx, pgdb.CreateCustomerParams{Phone: phone, Name: ""})
 		if err != nil {
-			return uuid.UUID{}, uuid.UUID{}, 0, fmt.Errorf("create customer: %w", err)
+			return uuid.UUID{}, uuid.UUID{}, loyaltyState{}, fmt.Errorf("create customer: %w", err)
 		}
 	}
 
@@ -668,15 +829,40 @@ func getOrCreateCustomer(ctx context.Context, q *pgdb.Queries, phone string) (uu
 	loyAcct, err := q.GetLoyaltyAccountByCustomer(ctx, pgtype.UUID{Bytes: custUID, Valid: true})
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return uuid.UUID{}, uuid.UUID{}, 0, fmt.Errorf("get loyalty account: %w", err)
+			return uuid.UUID{}, uuid.UUID{}, loyaltyState{}, fmt.Errorf("get loyalty account: %w", err)
 		}
 		loyAcct, err = q.CreateLoyaltyAccount(ctx, pgtype.UUID{Bytes: custUID, Valid: true})
 		if err != nil {
-			return uuid.UUID{}, uuid.UUID{}, 0, fmt.Errorf("create loyalty account: %w", err)
+			return uuid.UUID{}, uuid.UUID{}, loyaltyState{}, fmt.Errorf("create loyalty account: %w", err)
 		}
 	}
 
-	return custUID, uuid.UUID(loyAcct.ID.Bytes), floatFromNumeric(loyAcct.PointsBalance), nil
+	st := loyaltyState{
+		found:          true,
+		customerID:     cust.ID.Bytes,
+		pointsBalance:  floatFromNumeric(loyAcct.PointsBalance),
+		freeDrinksLeft: int(loyAcct.FreeDrinksLeft),
+		coffeePunches:  int(loyAcct.CoffeePunches),
+	}
+	return custUID, uuid.UUID(loyAcct.ID.Bytes), st, nil
+}
+
+// recordLoyaltyTx best-effort logs a loyalty ledger entry (non-fatal).
+func recordLoyaltyTx(ctx context.Context, q *pgdb.Queries, acctID, orderID pgtype.UUID, kind string, pointsDelta float64, receiptNo string) {
+	if kind == "earn" && pointsDelta == 0 {
+		return
+	}
+	if kind == "redeem" && pointsDelta == 0 {
+		return
+	}
+	note := fmt.Sprintf("Чек %s", receiptNo)
+	_, _ = q.CreateLoyaltyTransaction(ctx, pgdb.CreateLoyaltyTransactionParams{
+		LoyaltyAccountID: acctID,
+		OrderID:          orderID,
+		Kind:             kind,
+		PointsDelta:      numericFromFloat(pointsDelta),
+		Note:             &note,
+	})
 }
 
 func orderToDTO(o pgdb.Order) OrderDTO {

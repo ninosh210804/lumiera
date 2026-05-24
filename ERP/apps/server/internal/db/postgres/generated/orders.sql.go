@@ -17,7 +17,7 @@ SET points_balance = points_balance + $2,
     total_visits   = total_visits + $3,
     updated_at     = NOW()
 WHERE customer_id = $1
-RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at
+RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at, coffee_punches
 `
 
 type AddLoyaltyPointsParams struct {
@@ -37,6 +37,46 @@ func (q *Queries) AddLoyaltyPoints(ctx context.Context, arg AddLoyaltyPointsPara
 		&i.TotalVisits,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CoffeePunches,
+	)
+	return i, err
+}
+
+const applyLoyaltyOrder = `-- name: ApplyLoyaltyOrder :one
+UPDATE loyalty_accounts
+SET points_balance  = $2,
+    free_drinks_left = $3,
+    coffee_punches   = $4,
+    total_visits     = total_visits + 1,
+    updated_at       = NOW()
+WHERE customer_id = $1
+RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at, coffee_punches
+`
+
+type ApplyLoyaltyOrderParams struct {
+	CustomerID     pgtype.UUID    `db:"customer_id" json:"customer_id"`
+	PointsBalance  pgtype.Numeric `db:"points_balance" json:"points_balance"`
+	FreeDrinksLeft int32          `db:"free_drinks_left" json:"free_drinks_left"`
+	CoffeePunches  int32          `db:"coffee_punches" json:"coffee_punches"`
+}
+
+func (q *Queries) ApplyLoyaltyOrder(ctx context.Context, arg ApplyLoyaltyOrderParams) (LoyaltyAccount, error) {
+	row := q.db.QueryRow(ctx, applyLoyaltyOrder,
+		arg.CustomerID,
+		arg.PointsBalance,
+		arg.FreeDrinksLeft,
+		arg.CoffeePunches,
+	)
+	var i LoyaltyAccount
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.PointsBalance,
+		&i.FreeDrinksLeft,
+		&i.TotalVisits,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CoffeePunches,
 	)
 	return i, err
 }
@@ -112,7 +152,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 }
 
 const createLoyaltyAccount = `-- name: CreateLoyaltyAccount :one
-INSERT INTO loyalty_accounts (customer_id) VALUES ($1) RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at
+INSERT INTO loyalty_accounts (customer_id) VALUES ($1) RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at, coffee_punches
 `
 
 func (q *Queries) CreateLoyaltyAccount(ctx context.Context, customerID pgtype.UUID) (LoyaltyAccount, error) {
@@ -126,6 +166,7 @@ func (q *Queries) CreateLoyaltyAccount(ctx context.Context, customerID pgtype.UU
 		&i.TotalVisits,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CoffeePunches,
 	)
 	return i, err
 }
@@ -368,7 +409,7 @@ UPDATE loyalty_accounts
 SET points_balance = points_balance - $2,
     updated_at     = NOW()
 WHERE customer_id = $1 AND points_balance >= $2
-RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at
+RETURNING id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at, coffee_punches
 `
 
 type DeductLoyaltyPointsParams struct {
@@ -387,6 +428,7 @@ func (q *Queries) DeductLoyaltyPoints(ctx context.Context, arg DeductLoyaltyPoin
 		&i.TotalVisits,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CoffeePunches,
 	)
 	return i, err
 }
@@ -456,7 +498,7 @@ func (q *Queries) GetCustomerByPhone(ctx context.Context, phone string) (Custome
 }
 
 const getLoyaltyAccountByCustomer = `-- name: GetLoyaltyAccountByCustomer :one
-SELECT id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at FROM loyalty_accounts WHERE customer_id = $1
+SELECT id, customer_id, points_balance, free_drinks_left, total_visits, created_at, updated_at, coffee_punches FROM loyalty_accounts WHERE customer_id = $1
 `
 
 func (q *Queries) GetLoyaltyAccountByCustomer(ctx context.Context, customerID pgtype.UUID) (LoyaltyAccount, error) {
@@ -470,8 +512,60 @@ func (q *Queries) GetLoyaltyAccountByCustomer(ctx context.Context, customerID pg
 		&i.TotalVisits,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CoffeePunches,
 	)
 	return i, err
+}
+
+const getLoyaltyRuleByCode = `-- name: GetLoyaltyRuleByCode :one
+SELECT id, code, name, params, is_active, created_at, updated_at FROM loyalty_rules WHERE code = $1
+`
+
+func (q *Queries) GetLoyaltyRuleByCode(ctx context.Context, code string) (LoyaltyRule, error) {
+	row := q.db.QueryRow(ctx, getLoyaltyRuleByCode, code)
+	var i LoyaltyRule
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Params,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getLoyaltyRules = `-- name: GetLoyaltyRules :many
+SELECT id, code, name, params, is_active, created_at, updated_at FROM loyalty_rules ORDER BY code
+`
+
+func (q *Queries) GetLoyaltyRules(ctx context.Context) ([]LoyaltyRule, error) {
+	rows, err := q.db.Query(ctx, getLoyaltyRules)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LoyaltyRule
+	for rows.Next() {
+		var i LoyaltyRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Params,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getNextReceiptNo = `-- name: GetNextReceiptNo :one
@@ -907,6 +1001,36 @@ func (q *Queries) PayOrder(ctx context.Context, id pgtype.UUID) (Order, error) {
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const setLoyaltyRule = `-- name: SetLoyaltyRule :one
+UPDATE loyalty_rules
+SET params    = $2,
+    is_active = $3,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, name, params, is_active, created_at, updated_at
+`
+
+type SetLoyaltyRuleParams struct {
+	Code     string `db:"code" json:"code"`
+	Params   []byte `db:"params" json:"params"`
+	IsActive bool   `db:"is_active" json:"is_active"`
+}
+
+func (q *Queries) SetLoyaltyRule(ctx context.Context, arg SetLoyaltyRuleParams) (LoyaltyRule, error) {
+	row := q.db.QueryRow(ctx, setLoyaltyRule, arg.Code, arg.Params, arg.IsActive)
+	var i LoyaltyRule
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Params,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

@@ -141,3 +141,27 @@ RETURNING *;
 -- name: CreateLoyaltyTransaction :one
 INSERT INTO loyalty_transactions (loyalty_account_id, order_id, kind, points_delta, note)
 VALUES ($1, $2, $3, $4, $5) RETURNING *;
+
+-- name: GetLoyaltyRules :many
+SELECT * FROM loyalty_rules ORDER BY code;
+
+-- name: GetLoyaltyRuleByCode :one
+SELECT * FROM loyalty_rules WHERE code = $1;
+
+-- name: SetLoyaltyRule :one
+UPDATE loyalty_rules
+SET params    = $2,
+    is_active = $3,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING *;
+
+-- name: ApplyLoyaltyOrder :one
+UPDATE loyalty_accounts
+SET points_balance  = $2,
+    free_drinks_left = $3,
+    coffee_punches   = $4,
+    total_visits     = total_visits + 1,
+    updated_at       = NOW()
+WHERE customer_id = $1
+RETURNING *;

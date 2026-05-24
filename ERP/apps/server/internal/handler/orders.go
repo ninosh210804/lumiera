@@ -138,6 +138,52 @@ func (h *ordersHandler) create(w http.ResponseWriter, r *http.Request) {
 	mw.JSON(w, http.StatusCreated, order)
 }
 
+// POST /api/v1/orders/quote — price an order (incl. loyalty) without saving.
+type quoteRequest struct {
+	Items              []orderItemRequest `json:"items"`
+	CustomerPhone      string             `json:"customer_phone"`
+	LoyaltyPointsToUse float64            `json:"loyalty_points_to_use"`
+}
+
+func (h *ordersHandler) quote(w http.ResponseWriter, r *http.Request) {
+	var req quoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		mw.Error(w, badRequestf("invalid JSON"))
+		return
+	}
+	in := service.QuoteInput{
+		CustomerPhone:      req.CustomerPhone,
+		LoyaltyPointsToUse: req.LoyaltyPointsToUse,
+	}
+	for _, item := range req.Items {
+		productID, err := uuid.Parse(item.ProductID)
+		if err != nil {
+			mw.Error(w, badRequestf("invalid product_id: "+item.ProductID))
+			return
+		}
+		if item.Qty <= 0 {
+			mw.Error(w, badRequestf("item qty must be > 0"))
+			return
+		}
+		oi := service.OrderItemInput{ProductID: productID, Qty: item.Qty}
+		for _, modIDStr := range item.ModifierOptionIDs {
+			modID, err := uuid.Parse(modIDStr)
+			if err != nil {
+				mw.Error(w, badRequestf("invalid modifier_option_id: "+modIDStr))
+				return
+			}
+			oi.ModifierOptionIDs = append(oi.ModifierOptionIDs, modID)
+		}
+		in.Items = append(in.Items, oi)
+	}
+	quote, err := h.orders.Quote(r.Context(), in)
+	if err != nil {
+		mw.Error(w, err)
+		return
+	}
+	mw.JSON(w, http.StatusOK, quote)
+}
+
 // GET /api/v1/orders/{id}
 func (h *ordersHandler) get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

@@ -16,6 +16,7 @@ type Querier interface {
 	AddLoyaltyPoints(ctx context.Context, arg AddLoyaltyPointsParams) (LoyaltyAccount, error)
 	AddPurchaseOrderItem(ctx context.Context, arg AddPurchaseOrderItemParams) (PurchaseOrderItem, error)
 	AddRecipeItem(ctx context.Context, arg AddRecipeItemParams) (RecipeItem, error)
+	ApplyLoyaltyOrder(ctx context.Context, arg ApplyLoyaltyOrderParams) (LoyaltyAccount, error)
 	CancelOrder(ctx context.Context, arg CancelOrderParams) (Order, error)
 	CancelPurchaseOrder(ctx context.Context, id pgtype.UUID) (PurchaseOrder, error)
 	CloseShift(ctx context.Context, arg CloseShiftParams) (Shift, error)
@@ -68,6 +69,8 @@ type Querier interface {
 	GetJournalLines(ctx context.Context, journalEntryID pgtype.UUID) ([]GetJournalLinesRow, error)
 	GetLocation(ctx context.Context, id pgtype.UUID) (Location, error)
 	GetLoyaltyAccountByCustomer(ctx context.Context, customerID pgtype.UUID) (LoyaltyAccount, error)
+	GetLoyaltyRuleByCode(ctx context.Context, code string) (LoyaltyRule, error)
+	GetLoyaltyRules(ctx context.Context) ([]LoyaltyRule, error)
 	GetMenuSnapshot(ctx context.Context, locationID pgtype.UUID) ([]GetMenuSnapshotRow, error)
 	GetModifierGroups(ctx context.Context, productID pgtype.UUID) ([]GetModifierGroupsRow, error)
 	GetModifierOption(ctx context.Context, id pgtype.UUID) (GetModifierOptionRow, error)
@@ -140,6 +143,7 @@ type Querier interface {
 	RegisterDevice(ctx context.Context, arg RegisterDeviceParams) (DeviceRegistry, error)
 	RemoveRecipeItem(ctx context.Context, id pgtype.UUID) error
 	ResolveConflict(ctx context.Context, arg ResolveConflictParams) (SyncConflict, error)
+	SetLoyaltyRule(ctx context.Context, arg SetLoyaltyRuleParams) (LoyaltyRule, error)
 	SetProductStopList(ctx context.Context, arg SetProductStopListParams) error
 	SoftDeleteCategory(ctx context.Context, id pgtype.UUID) error
 	SoftDeleteIngredient(ctx context.Context, id pgtype.UUID) error

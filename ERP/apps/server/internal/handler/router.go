@@ -54,6 +54,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 		ih := &inventoryHandler{ing: ingSvc}
 		rh := &recipesHandler{recipes: recipeSvc}
 		oh := &ordersHandler{orders: orderSvc}
+		lh := &loyaltyHandler{orders: orderSvc}
 		sh := &stockHandler{stock: stockSvc}
 		suph := &suppliersHandler{stock: stockSvc}
 		shiftH := &shiftsHandler{shifts: shiftSvc}
@@ -173,6 +174,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 			r.Use(mw.Authenticate(cfg.JWT.Secret))
 			r.Use(mw.RequireAuth)
 			r.Get("/payment-methods", oh.listPaymentMethods)
+			r.Post("/quote", oh.quote)
 			r.Get("/", oh.list)
 			r.Post("/", oh.create)
 			r.Route("/{id}", func(r chi.Router) {
@@ -180,6 +182,14 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 				r.Get("/receipt", oh.receipt)
 				r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager)).Post("/cancel", oh.cancel)
 			})
+		})
+
+		// Loyalty (config readable by all staff; promo toggle = admin/manager)
+		r.Route("/loyalty", func(r chi.Router) {
+			r.Use(mw.Authenticate(cfg.JWT.Secret))
+			r.Use(mw.RequireAuth)
+			r.Get("/config", lh.config)
+			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager)).Post("/promo", lh.setPromo)
 		})
 
 		// Shifts
