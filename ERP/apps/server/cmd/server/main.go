@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ninosh210804/lumiera/apps/server/internal/accounting"
+	"github.com/ninosh210804/lumiera/apps/server/internal/bootstrap"
 	"github.com/ninosh210804/lumiera/apps/server/internal/config"
 	pgdb "github.com/ninosh210804/lumiera/apps/server/internal/db/postgres/generated"
 	"github.com/ninosh210804/lumiera/apps/server/internal/eventbus"
@@ -51,6 +52,12 @@ func main() {
 		}
 		defer pgPool.Close()
 		slog.Info("PostgreSQL connected")
+
+		// Self-provision the database on boot: apply migrations if the schema is
+		// missing, then ensure the default admin user. Idempotent; never fatal.
+		if err := bootstrap.Run(ctx, pgPool, slog.Default()); err != nil {
+			slog.Error("bootstrap failed (continuing to serve)", "error", err)
+		}
 	} else {
 		slog.Info("running in SQLite sidecar mode", "path", cfg.SQLite.Path)
 	}
