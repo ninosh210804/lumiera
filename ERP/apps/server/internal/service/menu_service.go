@@ -110,6 +110,7 @@ type ProductDTO struct {
 	ImageURL     *string    `json:"image_url"`
 	SortOrder    int32      `json:"sort_order"`
 	RecipeID     *uuid.UUID `json:"recipe_id"`
+	SalePrice    *float64   `json:"sale_price"`
 }
 
 type ProductDetailDTO struct {
@@ -127,7 +128,7 @@ func (s *MenuService) ListProducts(ctx context.Context, locationID uuid.UUID, ac
 		out := make([]ProductDTO, len(rows))
 		for i, r := range rows {
 			out[i] = productRowToDTO(r.ID, r.LocationID, r.CategoryID, r.Name, r.Description,
-				r.Sku, r.BasePrice, r.IsActive, r.IsStopListed, r.ImageUrl, r.SortOrder, r.CategoryName, r.RecipeID)
+				r.Sku, r.BasePrice, r.IsActive, r.IsStopListed, r.ImageUrl, r.SortOrder, r.CategoryName, r.RecipeID, r.SalePrice)
 		}
 		return out, nil
 	}
@@ -138,7 +139,7 @@ func (s *MenuService) ListProducts(ctx context.Context, locationID uuid.UUID, ac
 	out := make([]ProductDTO, len(rows))
 	for i, r := range rows {
 		out[i] = productRowToDTO(r.ID, r.LocationID, r.CategoryID, r.Name, r.Description,
-			r.Sku, r.BasePrice, r.IsActive, r.IsStopListed, r.ImageUrl, r.SortOrder, r.CategoryName, r.RecipeID)
+			r.Sku, r.BasePrice, r.IsActive, r.IsStopListed, r.ImageUrl, r.SortOrder, r.CategoryName, r.RecipeID, r.SalePrice)
 	}
 	return out, nil
 }
@@ -152,7 +153,7 @@ func (s *MenuService) ListMenu(ctx context.Context, locationID uuid.UUID) ([]Pro
 	out := make([]ProductDTO, len(rows))
 	for i, r := range rows {
 		out[i] = productRowToDTO(r.ID, r.LocationID, r.CategoryID, r.Name, r.Description,
-			r.Sku, r.BasePrice, r.IsActive, r.IsStopListed, r.ImageUrl, r.SortOrder, r.CategoryName, r.RecipeID)
+			r.Sku, r.BasePrice, r.IsActive, r.IsStopListed, r.ImageUrl, r.SortOrder, r.CategoryName, r.RecipeID, r.SalePrice)
 	}
 	return out, nil
 }
@@ -164,7 +165,7 @@ func (s *MenuService) GetProduct(ctx context.Context, id uuid.UUID) (*ProductDet
 	}
 	dto := &ProductDetailDTO{
 		ProductDTO: productRowToDTO(row.ID, row.LocationID, row.CategoryID, row.Name, row.Description,
-			row.Sku, row.BasePrice, row.IsActive, row.IsStopListed, row.ImageUrl, row.SortOrder, row.CategoryName, row.RecipeID),
+			row.Sku, row.BasePrice, row.IsActive, row.IsStopListed, row.ImageUrl, row.SortOrder, row.CategoryName, row.RecipeID, row.SalePrice),
 	}
 
 	groups, err := s.q.GetModifierGroups(ctx, pgtype.UUID{Bytes: id, Valid: true})
@@ -415,6 +416,7 @@ func productRowToDTO(
 	sortOrder int32,
 	categoryName string,
 	recipeID pgtype.UUID,
+	salePrice pgtype.Numeric,
 ) ProductDTO {
 	dto := ProductDTO{
 		ID:           uuid.UUID(id.Bytes),
@@ -433,6 +435,10 @@ func productRowToDTO(
 	if recipeID.Valid {
 		rid := uuid.UUID(recipeID.Bytes)
 		dto.RecipeID = &rid
+	}
+	if salePrice.Valid {
+		sp := floatFromNumeric(salePrice)
+		dto.SalePrice = &sp
 	}
 	return dto
 }

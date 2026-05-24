@@ -9,6 +9,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func embeddedMigrationCount(t *testing.T) int {
+	entries, err := migrationFS.ReadDir("sql")
+	if err != nil {
+		t.Fatalf("read embedded migrations: %v", err)
+	}
+	n := 0
+	for _, e := range entries {
+		if len(e.Name()) > 7 && e.Name()[len(e.Name())-7:] == ".up.sql" {
+			n++
+		}
+	}
+	return n
+}
+
 // Run with: TEST_DATABASE_URL=postgres://... go test ./internal/bootstrap -run TestMigrations -v
 func TestMigrationsIncremental(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -49,8 +63,9 @@ func TestMigrationsIncremental(t *testing.T) {
 	if !hasCoffeePunches() {
 		t.Fatal("fresh: coffee_punches column missing")
 	}
-	if c := ledgerCount(); c != 13 {
-		t.Fatalf("fresh: ledger want 13, got %d", c)
+	wantMigrations := embeddedMigrationCount(t)
+	if c := ledgerCount(); c != wantMigrations {
+		t.Fatalf("fresh: ledger want %d, got %d", wantMigrations, c)
 	}
 
 	// 2) Simulate a pre-ledger production DB (migrations 1-12 applied, no 13, no ledger).
@@ -74,8 +89,8 @@ func TestMigrationsIncremental(t *testing.T) {
 	if !hasCoffeePunches() {
 		t.Fatal("incremental: coffee_punches not re-added by migration 000013")
 	}
-	if c := ledgerCount(); c != 13 {
-		t.Fatalf("incremental: ledger want 13, got %d", c)
+	if c := ledgerCount(); c != wantMigrations {
+		t.Fatalf("incremental: ledger want %d, got %d", wantMigrations, c)
 	}
 	var promoExists int
 	_ = pool.QueryRow(ctx, `SELECT count(*) FROM loyalty_rules WHERE code='promo_discount'`).Scan(&promoExists)
@@ -87,7 +102,7 @@ func TestMigrationsIncremental(t *testing.T) {
 	if err := applyMigrationsIfNeeded(ctx, pool, logger); err != nil {
 		t.Fatalf("re-run: %v", err)
 	}
-	if c := ledgerCount(); c != 13 {
-		t.Fatalf("re-run: ledger changed, want 13, got %d", c)
+	if c := ledgerCount(); c != wantMigrations {
+		t.Fatalf("re-run: ledger changed, want %d, got %d", wantMigrations, c)
 	}
 }

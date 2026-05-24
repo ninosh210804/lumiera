@@ -249,6 +249,35 @@ func (h *ordersHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	mw.JSON(w, http.StatusOK, order)
 }
 
+// POST /api/v1/orders/{id}/soft-delete — hide an order from listings (admin).
+func (h *ordersHandler) softDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		mw.Error(w, badRequestf("invalid order id"))
+		return
+	}
+	if err := h.orders.SoftDelete(r.Context(), id); err != nil {
+		mw.Error(w, err)
+		return
+	}
+	mw.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// DELETE /api/v1/orders/{id} — permanently delete an order and reverse its
+// stock/loyalty effects (admin). For cleaning up test orders.
+func (h *ordersHandler) hardDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		mw.Error(w, badRequestf("invalid order id"))
+		return
+	}
+	if err := h.orders.HardDelete(r.Context(), id); err != nil {
+		mw.Error(w, err)
+		return
+	}
+	mw.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 // GET /api/v1/orders?shift_id=&from=&to=&limit=&offset=
 func (h *ordersHandler) list(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

@@ -8,6 +8,7 @@ import POSPage from "./pages/POSPage";
 import MenuPage from "./pages/MenuPage";
 import InventoryPage from "./pages/InventoryPage";
 import WarehousePage from "./pages/WarehousePage";
+import SalesPage from "./pages/SalesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/menu"      element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><MenuPage /></RoleProtectedRoute>} />
       <Route path="/inventory" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><InventoryPage /></RoleProtectedRoute>} />
       <Route path="/warehouse" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><WarehousePage /></RoleProtectedRoute>} />
+      <Route path="/sales"     element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><SalesPage /></RoleProtectedRoute>} />
       <Route path="/analytics" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AnalyticsPage /></RoleProtectedRoute>} />
       <Route path="/settings"  element={<RoleProtectedRoute allowedRoles={["admin"]}><SettingsPage /></RoleProtectedRoute>} />
 

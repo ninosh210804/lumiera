@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, subDays, startOfDay } from "date-fns";
 import { ru } from "date-fns/locale";
 import { api } from "../lib/api";
@@ -43,8 +43,23 @@ function rangeDates(r: Range) {
 export default function OrdersPage() {
   const { user } = useAuth();
   const locationId = user?.location_id ?? "";
+  const isAdmin = user?.role === "admin";
+  const qc = useQueryClient();
   const [range, setRange] = useState<Range>("today");
   const [selected, setSelected] = useState<OrderDTO | null>(null);
+
+  const refreshOrders = () => {
+    qc.invalidateQueries({ queryKey: ["orders", locationId, range] });
+    setSelected(null);
+  };
+  const softDelete = useMutation({
+    mutationFn: (id: string) => api.post(`/orders/${id}/soft-delete`),
+    onSuccess: refreshOrders,
+  });
+  const hardDelete = useMutation({
+    mutationFn: (id: string) => api.delete(`/orders/${id}`),
+    onSuccess: refreshOrders,
+  });
 
   const { from, to } = useMemo(() => rangeDates(range), [range]);
 
@@ -114,6 +129,7 @@ export default function OrdersPage() {
                 <th className="px-5 py-3 font-medium">Время</th>
                 <th className="px-5 py-3 font-medium">Статус</th>
                 <th className="px-5 py-3 font-medium text-right">Сумма</th>
+                {isAdmin && <th className="px-3 py-3 font-medium text-right">Действия</th>}
                 <th className="px-2 py-3 w-8" />
               </tr>
             </thead>
@@ -140,6 +156,36 @@ export default function OrdersPage() {
                     <td className="px-5 py-3.5 text-right font-semibold text-gray-900">
                       {order.total.toLocaleString("ru-RU")} ₸
                     </td>
+                    {isAdmin && (
+                      <td className="px-3 py-3.5 text-right whitespace-nowrap">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Скрыть чек #${order.receipt_no} из списка? (данные сохранятся)`))
+                              softDelete.mutate(order.id);
+                          }}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition mr-1"
+                          title="Скрыть (мягкое удаление)"
+                        >
+                          Скрыть
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (
+                              confirm(
+                                `Удалить чек #${order.receipt_no} НАВСЕГДА?\n\nЗаказ будет стёрт из БД, списанные ингредиенты вернутся на склад, бонусы клиента откатятся. Действие необратимо.`,
+                              )
+                            )
+                              hardDelete.mutate(order.id);
+                          }}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
+                          title="Удалить из БД (откатит склад и бонусы)"
+                        >
+                          Удалить
+                        </button>
+                      </td>
+                    )}
                     <td className="px-2 py-3.5 text-gray-300">
                       {selected?.id === order.id ? "▲" : "▼"}
                     </td>

@@ -49,6 +49,7 @@ export default function WarehousePage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [refillItems, setRefillItems] = useState<RefillItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [showNewIngredient, setShowNewIngredient] = useState(false);
 
   const { data: ingredients = [] } = useQuery<IngredientDTO[]>({
     queryKey: ["ingredients-warehouse", locationId],
@@ -203,7 +204,15 @@ export default function WarehousePage() {
             )}
 
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-3">Все товары</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900">Все товары</h3>
+                <button
+                  onClick={() => setShowNewIngredient(true)}
+                  className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition"
+                >
+                  + Новый товар
+                </button>
+              </div>
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {ingredients.map((ing) => (
                   <button
@@ -456,6 +465,110 @@ export default function WarehousePage() {
           </table>
         </div>
       )}
+
+      {showNewIngredient && (
+        <NewIngredientModal
+          onClose={() => setShowNewIngredient(false)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["ingredients-warehouse"] });
+            setShowNewIngredient(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const UNIT_OPTIONS: { value: string; label: string }[] = [
+  { value: "g", label: "граммы (g)" },
+  { value: "kg", label: "килограммы (kg)" },
+  { value: "ml", label: "миллилитры (ml)" },
+  { value: "l", label: "литры (l)" },
+  { value: "pcs", label: "штуки (pcs)" },
+];
+
+function NewIngredientModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState("");
+  const [unit, setUnit] = useState("g");
+  const [minStock, setMinStock] = useState("");
+  const [perishable, setPerishable] = useState(false);
+  const [shelfLife, setShelfLife] = useState("");
+  const [error, setError] = useState("");
+
+  const save = useMutation({
+    mutationFn: () => {
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        unit,
+        is_perishable: perishable,
+        min_stock_alert: minStock ? Number(minStock) : 0,
+      };
+      if (perishable && shelfLife) body.default_shelf_life_days = Number(shelfLife);
+      return api.post("/ingredients", body);
+    },
+    onSuccess: onSaved,
+    onError: (e: unknown) => {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? "Не удалось создать товар");
+    },
+  });
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) return setError("Введите название");
+    save.mutate();
+  }
+
+  const field = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition";
+  const label = "block text-sm font-medium text-gray-700 mb-1";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">Новый товар на склад</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div>
+            <label className={label}>Название</label>
+            <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Молоко цельное" autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Единица</label>
+              <select className={field} value={unit} onChange={(e) => setUnit(e.target.value)}>
+                {UNIT_OPTIONS.map((u) => (
+                  <option key={u.value} value={u.value}>{u.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={label}>Мин. остаток</label>
+              <input className={field} type="number" min="0" step="any" value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder="0" />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={perishable} onChange={(e) => setPerishable(e.target.checked)} className="rounded" />
+            Скоропортящийся
+          </label>
+          {perishable && (
+            <div>
+              <label className={label}>Срок годности (дней)</label>
+              <input className={field} type="number" min="0" value={shelfLife} onChange={(e) => setShelfLife(e.target.value)} placeholder="7" />
+            </div>
+          )}
+          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          <button
+            type="submit"
+            disabled={save.isPending}
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-500 transition disabled:opacity-50"
+          >
+            {save.isPending ? "Создание…" : "Создать товар"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

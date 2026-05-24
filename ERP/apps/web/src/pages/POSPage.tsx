@@ -23,6 +23,7 @@ interface ProductDTO {
   name: string;
   category_name: string;
   base_price: number;
+  sale_price: number | null;
   is_stop_listed: boolean;
   is_active: boolean;
 }
@@ -63,6 +64,7 @@ export default function POSPage() {
   const locationId = user?.location_id ?? "";
   const qc = useQueryClient();
   const [cart, setCart] = useState<OrderItem[]>([]);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
   const [customerPhone, setCustomerPhone] = useState("");
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
@@ -137,6 +139,16 @@ export default function POSPage() {
 
   const subtotal = cart.reduce((s, item) => s + item.line_total, 0);
 
+  // Distinct categories of available products, for the menu filter.
+  const categories = Array.from(
+    new Set(
+      products
+        .filter((p) => !p.is_stop_listed && p.is_active)
+        .map((p) => p.category_name)
+        .filter(Boolean),
+    ),
+  );
+
   // Authoritative price breakdown from the server (applies promo + loyalty).
   const quoteItems = cart.map((i) => ({
     product_id: i.product_id,
@@ -163,14 +175,15 @@ export default function POSPage() {
       alert("Этот товар недоступен");
       return;
     }
+    const price = product.sale_price ?? product.base_price;
     setCart([
       ...cart,
       {
         product_id: product.id,
         product_name: product.name,
         qty: 1,
-        unit_price: product.base_price,
-        line_total: product.base_price,
+        unit_price: price,
+        line_total: price,
       },
     ]);
   };
@@ -276,9 +289,38 @@ export default function POSPage() {
       {/* Left: Menu/Products */}
       <div className="flex-1 overflow-y-auto p-4">
         <h1 className="text-2xl font-bold text-white mb-4">Меню</h1>
+
+        {/* Category filter */}
+        {categories.length > 1 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={() => setActiveCat(null)}
+              className={[
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition",
+                activeCat === null ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600",
+              ].join(" ")}
+            >
+              Все
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCat(cat)}
+                className={[
+                  "px-3 py-1.5 rounded-lg text-sm font-medium transition",
+                  activeCat === cat ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600",
+                ].join(" ")}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           {products
             .filter((p) => !p.is_stop_listed && p.is_active)
+            .filter((p) => activeCat === null || p.category_name === activeCat)
             .map((p) => (
               <button
                 key={p.id}
@@ -289,9 +331,21 @@ export default function POSPage() {
                 <div className="text-left">
                   <div className="font-semibold truncate">{p.name}</div>
                   <div className="text-gray-300 text-xs">{p.category_name}</div>
-                  <div className="text-emerald-400 font-bold mt-1">
-                    {p.base_price.toLocaleString("ru-RU")} ₸
-                  </div>
+                  {p.sale_price != null ? (
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                      <span className="text-gray-500 text-xs line-through">
+                        {p.base_price.toLocaleString("ru-RU")}
+                      </span>
+                      <span className="text-amber-400 font-bold">
+                        {p.sale_price.toLocaleString("ru-RU")} ₸
+                      </span>
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded">АКЦИЯ</span>
+                    </div>
+                  ) : (
+                    <div className="text-emerald-400 font-bold mt-1">
+                      {p.base_price.toLocaleString("ru-RU")} ₸
+                    </div>
+                  )}
                 </div>
               </button>
             ))}

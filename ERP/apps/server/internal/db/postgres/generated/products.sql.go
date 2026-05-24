@@ -348,7 +348,12 @@ func (q *Queries) GetPriceHistory(ctx context.Context, arg GetPriceHistoryParams
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id, c.name AS category_name, r.id AS recipe_id
+SELECT p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id, c.name AS category_name, r.id AS recipe_id,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 LEFT JOIN recipes r ON r.id = p.recipe_id
@@ -374,6 +379,7 @@ type GetProductRow struct {
 	RecipeID     pgtype.UUID        `db:"recipe_id" json:"recipe_id"`
 	CategoryName string             `db:"category_name" json:"category_name"`
 	RecipeID_2   pgtype.UUID        `db:"recipe_id_2" json:"recipe_id_2"`
+	SalePrice    pgtype.Numeric     `db:"sale_price" json:"sale_price"`
 }
 
 func (q *Queries) GetProduct(ctx context.Context, id pgtype.UUID) (GetProductRow, error) {
@@ -398,6 +404,7 @@ func (q *Queries) GetProduct(ctx context.Context, id pgtype.UUID) (GetProductRow
 		&i.RecipeID,
 		&i.CategoryName,
 		&i.RecipeID_2,
+		&i.SalePrice,
 	)
 	return i, err
 }
@@ -406,7 +413,12 @@ const listActiveMenuProducts = `-- name: ListActiveMenuProducts :many
 SELECT
     p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id,
     c.name AS category_name,
-    c.sort_order AS category_sort_order
+    c.sort_order AS category_sort_order,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 WHERE p.location_id = $1
@@ -437,6 +449,7 @@ type ListActiveMenuProductsRow struct {
 	RecipeID          pgtype.UUID        `db:"recipe_id" json:"recipe_id"`
 	CategoryName      string             `db:"category_name" json:"category_name"`
 	CategorySortOrder int32              `db:"category_sort_order" json:"category_sort_order"`
+	SalePrice         pgtype.Numeric     `db:"sale_price" json:"sale_price"`
 }
 
 func (q *Queries) ListActiveMenuProducts(ctx context.Context, locationID pgtype.UUID) ([]ListActiveMenuProductsRow, error) {
@@ -467,6 +480,7 @@ func (q *Queries) ListActiveMenuProducts(ctx context.Context, locationID pgtype.
 			&i.RecipeID,
 			&i.CategoryName,
 			&i.CategorySortOrder,
+			&i.SalePrice,
 		); err != nil {
 			return nil, err
 		}
@@ -479,7 +493,12 @@ func (q *Queries) ListActiveMenuProducts(ctx context.Context, locationID pgtype.
 }
 
 const listActiveProducts = `-- name: ListActiveProducts :many
-SELECT p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id, c.name AS category_name
+SELECT p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id, c.name AS category_name,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 WHERE p.location_id = $1
@@ -506,6 +525,7 @@ type ListActiveProductsRow struct {
 	CreatedBy    pgtype.UUID        `db:"created_by" json:"created_by"`
 	RecipeID     pgtype.UUID        `db:"recipe_id" json:"recipe_id"`
 	CategoryName string             `db:"category_name" json:"category_name"`
+	SalePrice    pgtype.Numeric     `db:"sale_price" json:"sale_price"`
 }
 
 func (q *Queries) ListActiveProducts(ctx context.Context, locationID pgtype.UUID) ([]ListActiveProductsRow, error) {
@@ -535,6 +555,7 @@ func (q *Queries) ListActiveProducts(ctx context.Context, locationID pgtype.UUID
 			&i.CreatedBy,
 			&i.RecipeID,
 			&i.CategoryName,
+			&i.SalePrice,
 		); err != nil {
 			return nil, err
 		}
@@ -584,7 +605,12 @@ func (q *Queries) ListCategories(ctx context.Context, locationID pgtype.UUID) ([
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id, c.name AS category_name
+SELECT p.id, p.location_id, p.category_id, p.name, p.description, p.sku, p.base_price, p.is_active, p.is_stop_listed, p.image_url, p.sort_order, p.created_at, p.updated_at, p.deleted_at, p.created_by, p.recipe_id, c.name AS category_name,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 WHERE p.location_id = $1
@@ -610,6 +636,7 @@ type ListProductsRow struct {
 	CreatedBy    pgtype.UUID        `db:"created_by" json:"created_by"`
 	RecipeID     pgtype.UUID        `db:"recipe_id" json:"recipe_id"`
 	CategoryName string             `db:"category_name" json:"category_name"`
+	SalePrice    pgtype.Numeric     `db:"sale_price" json:"sale_price"`
 }
 
 func (q *Queries) ListProducts(ctx context.Context, locationID pgtype.UUID) ([]ListProductsRow, error) {
@@ -639,6 +666,7 @@ func (q *Queries) ListProducts(ctx context.Context, locationID pgtype.UUID) ([]L
 			&i.CreatedBy,
 			&i.RecipeID,
 			&i.CategoryName,
+			&i.SalePrice,
 		); err != nil {
 			return nil, err
 		}

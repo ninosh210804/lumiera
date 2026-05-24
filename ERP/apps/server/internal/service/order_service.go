@@ -189,6 +189,9 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		}
 
 		unitPrice := floatFromNumeric(prod.BasePrice)
+		if prod.SalePrice.Valid {
+			unitPrice = floatFromNumeric(prod.SalePrice) // active sale event overrides base price
+		}
 		var modDeltas []float64
 		var modNames []string
 
@@ -497,6 +500,9 @@ func (svc *OrderService) Quote(ctx context.Context, in QuoteInput) (*QuoteDTO, e
 			return nil, fmt.Errorf("get product: %w", err)
 		}
 		unitPrice := floatFromNumeric(prod.BasePrice)
+		if prod.SalePrice.Valid {
+			unitPrice = floatFromNumeric(prod.SalePrice) // active sale event overrides base price
+		}
 		for _, modID := range item.ModifierOptionIDs {
 			mod, err := svc.q.GetModifierOption(ctx, pgtype.UUID{Bytes: modID, Valid: true})
 			if err != nil {
@@ -678,6 +684,75 @@ func (svc *OrderService) Cancel(ctx context.Context, in CancelOrderInput) (*Orde
 	}
 	dto := orderToDTO(order)
 	return &dto, nil
+}
+
+// ─── Delete (admin) ─────────────────────────────────────────────────────────
+
+// SoftDelete hides an order from listings without removing its data.
+func (svc *OrderService) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	oid := pgtype.UUID{Bytes: id, Valid: true}
+	ct, err := svc.pool.Exec(ctx,
+		`UPDATE orders SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, oid)
+	if err != nil {
+		return fmt.Errorf("soft delete: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return domain.NewNotFound("order")
+	}
+	return nil
+}
+
+// HardDelete permanently removes an order and reverses the stock consumption
+// and loyalty changes it caused — for cleaning up test orders.
+func (svc *OrderService) HardDelete(ctx context.Context, id uuid.UUID) error {
+	tx, err := svc.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	oid := pgtype.UUID{Bytes: id, Valid: true}
+
+	// 1. Restore ingredient stock: sale movements had negative qty_delta, so
+	//    subtracting their sum adds the consumed quantity back.
+	if _, err := tx.Exec(ctx, `
+		UPDATE ingredients i
+		SET current_qty = current_qty - sm.delta
+		FROM (SELECT ingredient_id, COALESCE(SUM(qty_delta),0) AS delta
+		      FROM stock_movements WHERE order_id = $1 GROUP BY ingredient_id) sm
+		WHERE i.id = sm.ingredient_id`, oid); err != nil {
+		return fmt.Errorf("restore stock: %w", err)
+	}
+
+	// 2. Reverse loyalty points and the visit count for this order.
+	if _, err := tx.Exec(ctx, `
+		UPDATE loyalty_accounts la
+		SET points_balance = GREATEST(0, points_balance - lt.delta),
+		    total_visits   = GREATEST(0, total_visits - 1),
+		    updated_at     = NOW()
+		FROM (SELECT loyalty_account_id, COALESCE(SUM(points_delta),0) AS delta
+		      FROM loyalty_transactions WHERE order_id = $1 GROUP BY loyalty_account_id) lt
+		WHERE la.id = lt.loyalty_account_id`, oid); err != nil {
+		return fmt.Errorf("reverse loyalty: %w", err)
+	}
+
+	// 3. Remove non-cascading children, then the order (cascades items/modifiers/payments).
+	for _, stmt := range []string{
+		`DELETE FROM loyalty_transactions WHERE order_id = $1`,
+		`DELETE FROM stock_movements WHERE order_id = $1`,
+		`DELETE FROM refunds WHERE order_id = $1`,
+	} {
+		if _, err := tx.Exec(ctx, stmt, oid); err != nil {
+			return fmt.Errorf("delete children: %w", err)
+		}
+	}
+	ct, err := tx.Exec(ctx, `DELETE FROM orders WHERE id = $1`, oid)
+	if err != nil {
+		return fmt.Errorf("delete order: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return domain.NewNotFound("order")
+	}
+	return tx.Commit(ctx)
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────

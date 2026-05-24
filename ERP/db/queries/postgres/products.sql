@@ -1,12 +1,22 @@
 -- name: GetProduct :one
-SELECT p.*, c.name AS category_name, r.id AS recipe_id
+SELECT p.*, c.name AS category_name, r.id AS recipe_id,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 LEFT JOIN recipes r ON r.id = p.recipe_id
 WHERE p.id = $1 AND p.deleted_at IS NULL;
 
 -- name: ListProducts :many
-SELECT p.*, c.name AS category_name
+SELECT p.*, c.name AS category_name,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 WHERE p.location_id = $1
@@ -14,7 +24,12 @@ WHERE p.location_id = $1
 ORDER BY c.sort_order, p.sort_order, p.name;
 
 -- name: ListActiveProducts :many
-SELECT p.*, c.name AS category_name
+SELECT p.*, c.name AS category_name,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 WHERE p.location_id = $1
@@ -26,7 +41,12 @@ ORDER BY c.sort_order, p.sort_order, p.name;
 SELECT
     p.*,
     c.name AS category_name,
-    c.sort_order AS category_sort_order
+    c.sort_order AS category_sort_order,
+    (SELECT MIN(sei.sale_price) FROM sale_event_items sei
+     JOIN sale_events se ON se.id = sei.sale_event_id
+     WHERE sei.product_id = p.id AND se.is_active
+       AND (se.starts_at IS NULL OR se.starts_at <= NOW())
+       AND (se.ends_at   IS NULL OR se.ends_at   >= NOW()))::numeric AS sale_price
 FROM products p
 JOIN categories c ON c.id = p.category_id
 WHERE p.location_id = $1

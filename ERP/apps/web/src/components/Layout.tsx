@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { to: "/pos", icon: "🛒", label: "Касса (POS)", allowedRoles: ["barista", "manager", "admin"] },
   { to: "/orders", icon: "🧾", label: "Заказы", allowedRoles: ["admin", "manager", "barista"] },
   { to: "/menu", icon: "☕", label: "Меню", allowedRoles: ["admin", "manager"] },
+  { to: "/sales", icon: "🏷️", label: "Акции", allowedRoles: ["admin", "manager"] },
   { to: "/inventory", icon: "📦", label: "Склад (просмотр)", allowedRoles: ["admin", "manager"] },
   { to: "/warehouse", icon: "🏭", label: "Склад (управление)", allowedRoles: ["admin", "manager"] },
   { to: "/analytics", icon: "📈", label: "Аналитика", allowedRoles: ["admin", "manager"] },

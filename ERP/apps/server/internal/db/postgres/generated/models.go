@@ -441,6 +441,23 @@ type RolePermission struct {
 	PermissionID pgtype.UUID `db:"permission_id" json:"permission_id"`
 }
 
+type SaleEvent struct {
+	ID         pgtype.UUID        `db:"id" json:"id"`
+	LocationID pgtype.UUID        `db:"location_id" json:"location_id"`
+	Name       string             `db:"name" json:"name"`
+	IsActive   bool               `db:"is_active" json:"is_active"`
+	StartsAt   pgtype.Timestamptz `db:"starts_at" json:"starts_at"`
+	EndsAt     pgtype.Timestamptz `db:"ends_at" json:"ends_at"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	CreatedBy  pgtype.UUID        `db:"created_by" json:"created_by"`
+}
+
+type SaleEventItem struct {
+	SaleEventID pgtype.UUID    `db:"sale_event_id" json:"sale_event_id"`
+	ProductID   pgtype.UUID    `db:"product_id" json:"product_id"`
+	SalePrice   pgtype.Numeric `db:"sale_price" json:"sale_price"`
+}
+
 type Shift struct {
 	ID                  pgtype.UUID        `db:"id" json:"id"`
 	LocationID          pgtype.UUID        `db:"location_id" json:"location_id"`

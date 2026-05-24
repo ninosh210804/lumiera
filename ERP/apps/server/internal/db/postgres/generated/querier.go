@@ -16,6 +16,7 @@ type Querier interface {
 	AddLoyaltyPoints(ctx context.Context, arg AddLoyaltyPointsParams) (LoyaltyAccount, error)
 	AddPurchaseOrderItem(ctx context.Context, arg AddPurchaseOrderItemParams) (PurchaseOrderItem, error)
 	AddRecipeItem(ctx context.Context, arg AddRecipeItemParams) (RecipeItem, error)
+	AddSaleEventItem(ctx context.Context, arg AddSaleEventItemParams) (SaleEventItem, error)
 	ApplyLoyaltyOrder(ctx context.Context, arg ApplyLoyaltyOrderParams) (LoyaltyAccount, error)
 	CancelOrder(ctx context.Context, arg CancelOrderParams) (Order, error)
 	CancelPurchaseOrder(ctx context.Context, id pgtype.UUID) (PurchaseOrder, error)
@@ -44,6 +45,7 @@ type Querier interface {
 	CreatePurchaseOrder(ctx context.Context, arg CreatePurchaseOrderParams) (PurchaseOrder, error)
 	CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Recipe, error)
 	CreateRefund(ctx context.Context, arg CreateRefundParams) (Refund, error)
+	CreateSaleEvent(ctx context.Context, arg CreateSaleEventParams) (SaleEvent, error)
 	// ─── Stock batches ────────────────────────────────────────────────────────────
 	CreateStockBatch(ctx context.Context, arg CreateStockBatchParams) (StockBatch, error)
 	CreateStockMovement(ctx context.Context, arg CreateStockMovementParams) (StockMovement, error)
@@ -54,6 +56,7 @@ type Querier interface {
 	DeactivateUser(ctx context.Context, id pgtype.UUID) error
 	DeductLoyaltyPoints(ctx context.Context, arg DeductLoyaltyPointsParams) (LoyaltyAccount, error)
 	DeleteModifierGroup(ctx context.Context, id pgtype.UUID) error
+	DeleteSaleEvent(ctx context.Context, id pgtype.UUID) error
 	GetAccountByCode(ctx context.Context, code string) (Account, error)
 	GetActiveShift(ctx context.Context, arg GetActiveShiftParams) (Shift, error)
 	GetAllOrderItemModifiers(ctx context.Context, orderID pgtype.UUID) ([]GetAllOrderItemModifiersRow, error)
@@ -92,6 +95,7 @@ type Querier interface {
 	GetRecipe(ctx context.Context, id pgtype.UUID) (Recipe, error)
 	GetRecipeForProduct(ctx context.Context, recipeID pgtype.UUID) ([]GetRecipeForProductRow, error)
 	GetRecipeItems(ctx context.Context, recipeID pgtype.UUID) ([]GetRecipeItemsRow, error)
+	GetSaleEvent(ctx context.Context, id pgtype.UUID) (SaleEvent, error)
 	GetSalesHeatmap(ctx context.Context, arg GetSalesHeatmapParams) ([]GetSalesHeatmapRow, error)
 	GetShift(ctx context.Context, id pgtype.UUID) (Shift, error)
 	GetShiftOrderStats(ctx context.Context, shiftID pgtype.UUID) (GetShiftOrderStatsRow, error)
@@ -126,6 +130,8 @@ type Querier interface {
 	ListPurchaseOrders(ctx context.Context, locationID pgtype.UUID) ([]PurchaseOrder, error)
 	ListRecipes(ctx context.Context, locationID pgtype.UUID) ([]Recipe, error)
 	ListRoles(ctx context.Context) ([]ListRolesRow, error)
+	ListSaleEventItems(ctx context.Context, saleEventID pgtype.UUID) ([]ListSaleEventItemsRow, error)
+	ListSaleEvents(ctx context.Context, locationID pgtype.UUID) ([]ListSaleEventsRow, error)
 	ListShifts(ctx context.Context, locationID pgtype.UUID) ([]ListShiftsRow, error)
 	// ─── Suppliers ────────────────────────────────────────────────────────────────
 	ListSuppliers(ctx context.Context) ([]Supplier, error)
@@ -142,9 +148,11 @@ type Querier interface {
 	RefreshSalesHeatmap(ctx context.Context) error
 	RegisterDevice(ctx context.Context, arg RegisterDeviceParams) (DeviceRegistry, error)
 	RemoveRecipeItem(ctx context.Context, id pgtype.UUID) error
+	RemoveSaleEventItem(ctx context.Context, arg RemoveSaleEventItemParams) error
 	ResolveConflict(ctx context.Context, arg ResolveConflictParams) (SyncConflict, error)
 	SetLoyaltyRule(ctx context.Context, arg SetLoyaltyRuleParams) (LoyaltyRule, error)
 	SetProductStopList(ctx context.Context, arg SetProductStopListParams) error
+	SetSaleEventActive(ctx context.Context, arg SetSaleEventActiveParams) (SaleEvent, error)
 	SoftDeleteCategory(ctx context.Context, id pgtype.UUID) error
 	SoftDeleteIngredient(ctx context.Context, id pgtype.UUID) error
 	SoftDeleteProduct(ctx context.Context, id pgtype.UUID) error

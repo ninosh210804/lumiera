@@ -47,6 +47,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 		shiftSvc := service.NewShiftService(q)
 		analyticsSvc := service.NewAnalyticsService(q)
 		syncSvc := service.NewSyncService(q)
+		saleSvc := service.NewSaleService(q)
 
 		ah := &authHandler{auth: authSvc}
 		uh := &usersHandler{users: userSvc}
@@ -55,6 +56,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 		rh := &recipesHandler{recipes: recipeSvc}
 		oh := &ordersHandler{orders: orderSvc}
 		lh := &loyaltyHandler{orders: orderSvc}
+		saleH := &salesHandler{sales: saleSvc}
 		sh := &stockHandler{stock: stockSvc}
 		suph := &suppliersHandler{stock: stockSvc}
 		shiftH := &shiftsHandler{shifts: shiftSvc}
@@ -181,6 +183,26 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 				r.Get("/", oh.get)
 				r.Get("/receipt", oh.receipt)
 				r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager)).Post("/cancel", oh.cancel)
+				r.With(mw.RequireRole(domain.RoleAdmin)).Post("/soft-delete", oh.softDelete)
+				r.With(mw.RequireRole(domain.RoleAdmin)).Delete("/", oh.hardDelete)
+			})
+		})
+
+		// Sale events (read by all staff for POS pricing; write = admin/manager)
+		r.Route("/sales", func(r chi.Router) {
+			r.Use(mw.Authenticate(cfg.JWT.Secret))
+			r.Use(mw.RequireAuth)
+			r.Get("/", saleH.list)
+			r.Group(func(r chi.Router) {
+				r.Use(mw.RequireRole(domain.RoleAdmin, domain.RoleManager))
+				r.Post("/", saleH.create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", saleH.get)
+					r.Post("/active", saleH.setActive)
+					r.Delete("/", saleH.delete)
+					r.Post("/items", saleH.addItem)
+					r.Delete("/items/{productId}", saleH.removeItem)
+				})
 			})
 		})
 
