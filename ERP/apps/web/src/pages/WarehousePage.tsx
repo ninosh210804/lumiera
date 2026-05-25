@@ -13,6 +13,8 @@ interface IngredientDTO {
   min_stock_alert: number;
   current_avg_cost: number;
   is_perishable: boolean;
+  default_shelf_life_days?: number | null;
+  is_active: boolean;
 }
 
 interface SupplierDTO {
@@ -50,6 +52,7 @@ export default function WarehousePage() {
   const [refillItems, setRefillItems] = useState<RefillItem[]>([]);
   const [notes, setNotes] = useState("");
   const [showNewIngredient, setShowNewIngredient] = useState(false);
+  const [editIngredient, setEditIngredient] = useState<IngredientDTO | null>(null);
 
   const { data: ingredients = [] } = useQuery<IngredientDTO[]>({
     queryKey: ["ingredients-warehouse", locationId],
@@ -215,17 +218,28 @@ export default function WarehousePage() {
               </div>
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {ingredients.map((ing) => (
-                  <button
+                  <div
                     key={ing.id}
-                    onClick={() => addRefillItem(ing.id)}
-                    disabled={refillItems.some((item) => item.ingredient_id === ing.id)}
-                    className="w-full text-left text-sm px-2 py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:bg-gray-50 rounded transition"
+                    className="group flex items-center gap-1 rounded hover:bg-gray-100 transition"
                   >
-                    <div className="font-medium text-gray-900">{ing.name}</div>
-                    <div className="text-xs text-gray-500">
-                      Осталось: {ing.current_qty.toFixed(2)} {ing.unit}
-                    </div>
-                  </button>
+                    <button
+                      onClick={() => addRefillItem(ing.id)}
+                      disabled={refillItems.some((item) => item.ingredient_id === ing.id)}
+                      className="flex-1 text-left text-sm px-2 py-1.5 disabled:opacity-50 rounded transition"
+                    >
+                      <div className="font-medium text-gray-900">{ing.name}</div>
+                      <div className="text-xs text-gray-500">
+                        Осталось: {ing.current_qty.toFixed(2)} {ing.unit}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setEditIngredient(ing)}
+                      title="Редактировать"
+                      className="opacity-0 group-hover:opacity-100 shrink-0 px-2 py-1 text-gray-400 hover:text-blue-600 transition"
+                    >
+                      ✏️
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -467,11 +481,22 @@ export default function WarehousePage() {
       )}
 
       {showNewIngredient && (
-        <NewIngredientModal
+        <IngredientModal
           onClose={() => setShowNewIngredient(false)}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["ingredients-warehouse"] });
             setShowNewIngredient(false);
+          }}
+        />
+      )}
+
+      {editIngredient && (
+        <IngredientModal
+          ingredient={editIngredient}
+          onClose={() => setEditIngredient(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["ingredients-warehouse"] });
+            setEditIngredient(null);
           }}
         />
       )}
@@ -487,12 +512,25 @@ const UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: "pcs", label: "штуки (pcs)" },
 ];
 
-function NewIngredientModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [name, setName] = useState("");
-  const [unit, setUnit] = useState("g");
-  const [minStock, setMinStock] = useState("");
-  const [perishable, setPerishable] = useState(false);
-  const [shelfLife, setShelfLife] = useState("");
+function IngredientModal({
+  ingredient,
+  onClose,
+  onSaved,
+}: {
+  ingredient?: IngredientDTO;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isEdit = !!ingredient;
+  const [name, setName] = useState(ingredient?.name ?? "");
+  const [unit, setUnit] = useState(ingredient?.unit ?? "g");
+  const [minStock, setMinStock] = useState(
+    ingredient?.min_stock_alert != null ? String(ingredient.min_stock_alert) : ""
+  );
+  const [perishable, setPerishable] = useState(ingredient?.is_perishable ?? false);
+  const [shelfLife, setShelfLife] = useState(
+    ingredient?.default_shelf_life_days != null ? String(ingredient.default_shelf_life_days) : ""
+  );
   const [error, setError] = useState("");
 
   const save = useMutation({
@@ -502,14 +540,18 @@ function NewIngredientModal({ onClose, onSaved }: { onClose: () => void; onSaved
         unit,
         is_perishable: perishable,
         min_stock_alert: minStock ? Number(minStock) : 0,
+        default_shelf_life_days: perishable && shelfLife ? Number(shelfLife) : null,
       };
-      if (perishable && shelfLife) body.default_shelf_life_days = Number(shelfLife);
+      if (isEdit) {
+        body.is_active = ingredient!.is_active;
+        return api.put(`/ingredients/${ingredient!.id}`, body);
+      }
       return api.post("/ingredients", body);
     },
     onSuccess: onSaved,
     onError: (e: unknown) => {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? "Не удалось создать товар");
+      setError(msg ?? (isEdit ? "Не удалось сохранить товар" : "Не удалось создать товар"));
     },
   });
 
@@ -527,7 +569,9 @@ function NewIngredientModal({ onClose, onSaved }: { onClose: () => void; onSaved
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Новый товар на склад</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {isEdit ? "Редактировать товар" : "Новый товар на склад"}
+          </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
@@ -565,7 +609,9 @@ function NewIngredientModal({ onClose, onSaved }: { onClose: () => void; onSaved
             disabled={save.isPending}
             className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-500 transition disabled:opacity-50"
           >
-            {save.isPending ? "Создание…" : "Создать товар"}
+            {save.isPending
+              ? (isEdit ? "Сохранение…" : "Создание…")
+              : (isEdit ? "Сохранить" : "Создать товар")}
           </button>
         </form>
       </div>
