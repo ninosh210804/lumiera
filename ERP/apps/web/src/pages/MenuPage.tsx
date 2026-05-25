@@ -368,7 +368,7 @@ function ProductModal({
             className={fieldClass}
             type="number"
             min="0"
-            step="50"
+            step="any"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             placeholder="1200"
