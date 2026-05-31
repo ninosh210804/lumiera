@@ -3,7 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, subDays, startOfDay } from "date-fns";
 import { ru } from "date-fns/locale";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
 } from "recharts";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -36,20 +43,43 @@ interface ProductABCRow {
   margin_pct: number;
 }
 
-type Period = "week" | "month" | "quarter";
+interface CompSummaryRow {
+  recipient: string;
+  orders_count: number;
+  total_value: number;
+  total_cost: number;
+}
+
+interface CompItemRow {
+  recipient: string;
+  product_id: string;
+  product_name: string;
+  qty: number;
+  total_value: number;
+}
+
+interface CompReport {
+  summary: CompSummaryRow[];
+  items: CompItemRow[];
+}
+
+type Period = "today" | "week" | "month" | "quarter";
 const PERIODS: { value: Period; label: string }[] = [
-  { value: "week",    label: "Неделя" },
-  { value: "month",   label: "Месяц" },
+  { value: "today", label: "Сегодня" },
+  { value: "week", label: "Неделя" },
+  { value: "month", label: "Месяц" },
   { value: "quarter", label: "Квартал" },
 ];
 
 function periodDates(p: Period) {
   const to = new Date();
-  const days = p === "week" ? 6 : p === "month" ? 29 : 89;
+  const days = p === "today" ? 0 : p === "week" ? 6 : p === "month" ? 29 : 89;
   return { from: startOfDay(subDays(to, days)), to };
 }
 
-function tenge(n: number) { return n.toLocaleString("ru-RU") + " ₸"; }
+function tenge(n: number) {
+  return n.toLocaleString("ru-RU") + " ₸";
+}
 
 export default function AnalyticsPage() {
   const { user } = useAuth();
@@ -60,29 +90,45 @@ export default function AnalyticsPage() {
 
   const { from, to } = useMemo(() => periodDates(period), [period]);
   const fromISO = from.toISOString();
-  const toISO   = to.toISOString();
+  const toISO = to.toISOString();
 
   const { data: revenue = [] } = useQuery<DailyRevenueRow[]>({
     queryKey: ["revenue-detail", locationId, period],
     queryFn: () =>
-      api.get("/analytics/revenue", { params: { location_id: locationId, from: fromISO, to: toISO } })
-         .then((r) => r.data.data ?? []),
+      api
+        .get("/analytics/revenue", {
+          params: { location_id: locationId, from: fromISO, to: toISO },
+        })
+        .then((r) => r.data.data ?? []),
     enabled: !!locationId,
   });
 
   const { data: baristas = [] } = useQuery<BaristaStatsRow[]>({
     queryKey: ["barista-stats", locationId, period],
     queryFn: () =>
-      api.get("/analytics/baristas", { params: { location_id: locationId, from: fromISO, to: toISO } })
-         .then((r) => r.data.data ?? []),
+      api
+        .get("/analytics/baristas", {
+          params: { location_id: locationId, from: fromISO, to: toISO },
+        })
+        .then((r) => r.data.data ?? []),
     enabled: !!locationId,
   });
 
   const { data: abc = [] } = useQuery<ProductABCRow[]>({
     queryKey: ["abc-analytics", locationId],
     queryFn: () =>
-      api.get("/analytics/products", { params: { location_id: locationId } })
-         .then((r) => r.data.data ?? []),
+      api
+        .get("/analytics/products", { params: { location_id: locationId } })
+        .then((r) => r.data.data ?? []),
+    enabled: !!locationId,
+  });
+
+  const { data: comps } = useQuery<CompReport>({
+    queryKey: ["comp-report", locationId, period],
+    queryFn: () =>
+      api
+        .get("/analytics/comps", { params: { location_id: locationId, from: fromISO, to: toISO } })
+        .then((r) => r.data.data ?? { summary: [], items: [] }),
     enabled: !!locationId,
   });
 
@@ -93,6 +139,7 @@ export default function AnalyticsPage() {
       qc.invalidateQueries({ queryKey: ["revenue-detail"] });
       qc.invalidateQueries({ queryKey: ["barista-stats"] });
       qc.invalidateQueries({ queryKey: ["abc-analytics"] });
+      qc.invalidateQueries({ queryKey: ["comp-report"] });
       setTimeout(() => setRefreshed(false), 2000);
     },
   });
@@ -103,9 +150,9 @@ export default function AnalyticsPage() {
   }));
 
   const totalRevenue = revenue.reduce((s, r) => s + r.revenue, 0);
-  const totalMargin  = revenue.reduce((s, r) => s + r.margin, 0);
-  const totalOrders  = revenue.reduce((s, r) => s + r.orders_count, 0);
-  const marginPct    = totalRevenue > 0 ? Math.round((totalMargin / totalRevenue) * 100) : 0;
+  const totalMargin = revenue.reduce((s, r) => s + r.margin, 0);
+  const totalOrders = revenue.reduce((s, r) => s + r.orders_count, 0);
+  const marginPct = totalRevenue > 0 ? Math.round((totalMargin / totalRevenue) * 100) : 0;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -132,7 +179,9 @@ export default function AnalyticsPage() {
                 onClick={() => setPeriod(p.value)}
                 className={[
                   "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
-                  period === p.value ? "bg-white text-brand shadow-sm" : "text-gray-500 hover:text-gray-700",
+                  period === p.value
+                    ? "bg-white text-brand shadow-sm"
+                    : "text-gray-500 hover:text-gray-700",
                 ].join(" ")}
               >
                 {p.label}
@@ -145,14 +194,21 @@ export default function AnalyticsPage() {
       {/* Summary KPIs */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Выручка",     value: tenge(totalRevenue), accent: true },
-          { label: "Маржа",       value: `${marginPct}%`,     sub: tenge(totalMargin) },
-          { label: "Чеков",       value: totalOrders.toLocaleString("ru-RU") },
-          { label: "Ср. чек",     value: tenge(totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0) },
+          { label: "Выручка", value: tenge(totalRevenue), accent: true },
+          { label: "Маржа", value: `${marginPct}%`, sub: tenge(totalMargin) },
+          { label: "Чеков", value: totalOrders.toLocaleString("ru-RU") },
+          {
+            label: "Ср. чек",
+            value: tenge(totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0),
+          },
         ].map(({ label, value, sub, accent }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 p-5">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{label}</p>
-            <p className={`mt-2 text-2xl font-bold tabular-nums ${accent ? "text-brand" : "text-gray-900"}`}>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
+              {label}
+            </p>
+            <p
+              className={`mt-2 text-2xl font-bold tabular-nums ${accent ? "text-brand" : "text-gray-900"}`}
+            >
               {value}
             </p>
             {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
@@ -171,20 +227,36 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: 56, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} axisLine={false} tickLine={false}
-                tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+              />
               <Tooltip
                 formatter={(v: number, name: string) => [
                   tenge(v),
-                  name === "revenue" ? "Выручка" : name === "total_cost" ? "Себестоимость" : "Маржа",
+                  name === "revenue"
+                    ? "Выручка"
+                    : name === "total_cost"
+                      ? "Себестоимость"
+                      : "Маржа",
                 ]}
                 contentStyle={{ borderRadius: 10, border: "1px solid #E5E7EB", fontSize: 12 }}
               />
-              <Legend formatter={(v) =>
-                v === "revenue" ? "Выручка" : v === "total_cost" ? "Себестоимость" : "Маржа"
-              } wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="revenue"    fill="#6B3F1F" radius={[4, 4, 0, 0]} />
+              <Legend
+                formatter={(v) =>
+                  v === "revenue" ? "Выручка" : v === "total_cost" ? "Себестоимость" : "Маржа"
+                }
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              <Bar dataKey="revenue" fill="#6B3F1F" radius={[4, 4, 0, 0]} />
               <Bar dataKey="total_cost" fill="#F0DCC9" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -196,7 +268,9 @@ export default function AnalyticsPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="text-sm font-semibold text-gray-800 mb-4">По бариста</h2>
           {baristas.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-gray-300 text-sm">Нет данных</div>
+            <div className="h-40 flex items-center justify-center text-gray-300 text-sm">
+              Нет данных
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -212,8 +286,12 @@ export default function AnalyticsPage() {
                   <tr key={b.id} className="border-b border-gray-50">
                     <td className="py-3 font-medium text-gray-900">{b.full_name}</td>
                     <td className="py-3 text-right text-gray-600 tabular-nums">{b.orders_count}</td>
-                    <td className="py-3 text-right font-semibold tabular-nums">{tenge(b.revenue)}</td>
-                    <td className="py-3 text-right text-gray-600 tabular-nums">{tenge(Math.round(b.avg_check))}</td>
+                    <td className="py-3 text-right font-semibold tabular-nums">
+                      {tenge(b.revenue)}
+                    </td>
+                    <td className="py-3 text-right text-gray-600 tabular-nums">
+                      {tenge(Math.round(b.avg_check))}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -225,19 +303,22 @@ export default function AnalyticsPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="text-sm font-semibold text-gray-800 mb-4">Топ-10 ABC</h2>
           {abc.length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-gray-300 text-sm">Нет данных</div>
+            <div className="h-40 flex items-center justify-center text-gray-300 text-sm">
+              Нет данных
+            </div>
           ) : (
             <div className="space-y-2">
               {abc.slice(0, 10).map((row, i) => {
                 const share = abc[0].revenue > 0 ? (row.revenue / abc[0].revenue) * 100 : 0;
-                const abcClass =
-                  i < 3 ? "bg-emerald-500" : i < 6 ? "bg-amber-400" : "bg-gray-200";
+                const abcClass = i < 3 ? "bg-emerald-500" : i < 6 ? "bg-amber-400" : "bg-gray-200";
                 return (
                   <div key={row.product_id} className="flex items-center gap-3">
                     <span className="w-4 text-xs text-gray-300 text-right font-mono">{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-sm font-medium text-gray-800 truncate">{row.product_name}</span>
+                        <span className="text-sm font-medium text-gray-800 truncate">
+                          {row.product_name}
+                        </span>
                         <span className="text-xs font-semibold text-gray-600 ml-2 shrink-0">
                           {tenge(row.revenue)}
                         </span>
@@ -255,6 +336,78 @@ export default function AnalyticsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Comps — products taken without payment (e.g. Zhandos) */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-800">Забрано без оплаты (долг)</h2>
+          {!!comps && comps.summary.length > 0 && (
+            <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg">
+              Всего: {tenge(comps.summary.reduce((s, r) => s + r.total_value, 0))}
+            </span>
+          )}
+        </div>
+        {!comps || comps.summary.length === 0 ? (
+          <div className="h-24 flex items-center justify-center text-gray-300 text-sm">
+            Никто не забирал товар без оплаты за период
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-6">
+            {/* Per-recipient totals */}
+            <div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] text-gray-400 uppercase tracking-wide border-b border-gray-100">
+                    <th className="pb-2 text-left font-medium">Кто</th>
+                    <th className="pb-2 text-right font-medium">Раз</th>
+                    <th className="pb-2 text-right font-medium">Сумма</th>
+                    <th className="pb-2 text-right font-medium">Себест.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comps.summary.map((r) => (
+                    <tr key={r.recipient} className="border-b border-gray-50">
+                      <td className="py-3 font-medium text-gray-900">{r.recipient || "—"}</td>
+                      <td className="py-3 text-right text-gray-600 tabular-nums">
+                        {r.orders_count}
+                      </td>
+                      <td className="py-3 text-right font-semibold text-amber-700 tabular-nums">
+                        {tenge(r.total_value)}
+                      </td>
+                      <td className="py-3 text-right text-gray-500 tabular-nums">
+                        {tenge(r.total_cost)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* What was taken */}
+            <div>
+              <div className="text-[11px] text-gray-400 uppercase tracking-wide mb-2 font-medium">
+                Что забрали
+              </div>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {comps.items.map((it) => (
+                  <div
+                    key={`${it.recipient}-${it.product_id}`}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="text-gray-700 truncate">
+                      <span className="text-gray-400">{it.recipient}:</span> {it.product_name}
+                      <span className="text-gray-400"> ×{it.qty}</span>
+                    </span>
+                    <span className="font-medium text-gray-600 tabular-nums ml-2 shrink-0">
+                      {tenge(it.total_value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

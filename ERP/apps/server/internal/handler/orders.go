@@ -34,6 +34,8 @@ type createOrderRequest struct {
 	LoyaltyPointsToUse float64            `json:"loyalty_points_to_use"`
 	ClientUUID         string             `json:"client_uuid"`
 	ShiftID            string             `json:"shift_id"`
+	Comp               bool               `json:"comp"`
+	CompRecipient      string             `json:"comp_recipient"`
 }
 
 type orderItemRequest struct {
@@ -65,8 +67,12 @@ func (h *ordersHandler) create(w http.ResponseWriter, r *http.Request) {
 		mw.Error(w, badRequestf("items is required"))
 		return
 	}
-	if len(req.Payments) == 0 {
+	if len(req.Payments) == 0 && !req.Comp {
 		mw.Error(w, badRequestf("payments is required"))
+		return
+	}
+	if req.Comp && req.CompRecipient == "" {
+		mw.Error(w, badRequestf("comp_recipient is required for comps"))
 		return
 	}
 
@@ -75,6 +81,8 @@ func (h *ordersHandler) create(w http.ResponseWriter, r *http.Request) {
 		BaristaID:          claims.UserID,
 		CustomerPhone:      req.CustomerPhone,
 		LoyaltyPointsToUse: req.LoyaltyPointsToUse,
+		Comp:               req.Comp,
+		CompRecipient:      req.CompRecipient,
 	}
 
 	if req.ClientUUID != "" {

@@ -62,6 +62,18 @@ func (h *analyticsHandler) baristaStats(w http.ResponseWriter, r *http.Request) 
 	mw.JSON(w, http.StatusOK, data)
 }
 
+// GET /api/v1/analytics/comps?from=2006-01-02&to=2006-01-02
+// Products taken without payment (e.g. Zhandos), per recipient + breakdown.
+func (h *analyticsHandler) comps(w http.ResponseWriter, r *http.Request) {
+	locID, from, to := analyticsParams(r)
+	data, err := h.analytics.GetCompReport(r.Context(), locID, from, to)
+	if err != nil {
+		mw.Error(w, err)
+		return
+	}
+	mw.JSON(w, http.StatusOK, data)
+}
+
 // POST /api/v1/analytics/refresh  (admin only)
 func (h *analyticsHandler) refreshViews(w http.ResponseWriter, r *http.Request) {
 	if err := h.analytics.RefreshViews(r.Context()); err != nil {

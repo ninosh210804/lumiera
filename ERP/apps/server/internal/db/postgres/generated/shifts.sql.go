@@ -223,7 +223,7 @@ SELECT
     COUNT(*)::bigint          AS orders_count,
     COALESCE(SUM(total), 0)   AS revenue
 FROM orders
-WHERE shift_id = $1 AND status = 'paid'
+WHERE shift_id = $1 AND status = 'paid' AND is_comp = FALSE
 `
 
 type GetShiftOrderStatsRow struct {

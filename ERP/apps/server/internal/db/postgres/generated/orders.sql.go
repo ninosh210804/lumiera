@@ -88,7 +88,7 @@ SET status       = 'cancelled',
     cancelled_by  = $3,
     cancelled_at  = NOW()
 WHERE id = $1 AND status IN ('open','paid')
-RETURNING id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by
+RETURNING id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by, is_comp, comp_recipient
 `
 
 type CancelOrderParams struct {
@@ -121,6 +121,8 @@ func (q *Queries) CancelOrder(ctx context.Context, arg CancelOrderParams) (Order
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
+		&i.IsComp,
+		&i.CompRecipient,
 	)
 	return i, err
 }
@@ -211,12 +213,12 @@ const createOrder = `-- name: CreateOrder :one
 INSERT INTO orders (
     location_id, shift_id, barista_id, customer_id,
     subtotal, discount_total, loyalty_points_used, total, cost_total,
-    receipt_no, status, client_uuid, created_by
+    receipt_no, status, client_uuid, created_by, is_comp, comp_recipient
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
-    $10, 'open', $11, $3
-) RETURNING id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by
+    $10, 'open', $11, $3, $12, $13
+) RETURNING id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by, is_comp, comp_recipient
 `
 
 type CreateOrderParams struct {
@@ -231,6 +233,8 @@ type CreateOrderParams struct {
 	CostTotal         pgtype.Numeric `db:"cost_total" json:"cost_total"`
 	ReceiptNo         string         `db:"receipt_no" json:"receipt_no"`
 	ClientUuid        pgtype.UUID    `db:"client_uuid" json:"client_uuid"`
+	IsComp            bool           `db:"is_comp" json:"is_comp"`
+	CompRecipient     string         `db:"comp_recipient" json:"comp_recipient"`
 }
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
@@ -246,6 +250,8 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		arg.CostTotal,
 		arg.ReceiptNo,
 		arg.ClientUuid,
+		arg.IsComp,
+		arg.CompRecipient,
 	)
 	var i Order
 	err := row.Scan(
@@ -269,6 +275,8 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
+		&i.IsComp,
+		&i.CompRecipient,
 	)
 	return i, err
 }
@@ -585,7 +593,7 @@ func (q *Queries) GetNextReceiptNo(ctx context.Context, locationID pgtype.UUID) 
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by FROM orders WHERE id = $1 AND deleted_at IS NULL
+SELECT id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by, is_comp, comp_recipient FROM orders WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetOrder(ctx context.Context, id pgtype.UUID) (Order, error) {
@@ -612,6 +620,8 @@ func (q *Queries) GetOrder(ctx context.Context, id pgtype.UUID) (Order, error) {
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
+		&i.IsComp,
+		&i.CompRecipient,
 	)
 	return i, err
 }
@@ -775,7 +785,7 @@ func (q *Queries) GetPaymentMethodByCode(ctx context.Context, code string) (Paym
 }
 
 const listOrdersByLocation = `-- name: ListOrdersByLocation :many
-SELECT o.id, o.location_id, o.shift_id, o.barista_id, o.customer_id, o.status, o.subtotal, o.discount_total, o.loyalty_points_used, o.total, o.cost_total, o.receipt_no, o.cancel_reason, o.cancelled_by, o.cancelled_at, o.client_uuid, o.created_at, o.updated_at, o.deleted_at, o.created_by, u.full_name AS barista_name
+SELECT o.id, o.location_id, o.shift_id, o.barista_id, o.customer_id, o.status, o.subtotal, o.discount_total, o.loyalty_points_used, o.total, o.cost_total, o.receipt_no, o.cancel_reason, o.cancelled_by, o.cancelled_at, o.client_uuid, o.created_at, o.updated_at, o.deleted_at, o.created_by, o.is_comp, o.comp_recipient, u.full_name AS barista_name
 FROM orders o
 JOIN users u ON u.id = o.barista_id
 WHERE o.location_id = $1
@@ -814,6 +824,8 @@ type ListOrdersByLocationRow struct {
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedBy         pgtype.UUID        `db:"created_by" json:"created_by"`
+	IsComp            bool               `db:"is_comp" json:"is_comp"`
+	CompRecipient     string             `db:"comp_recipient" json:"comp_recipient"`
 	BaristaName       string             `db:"barista_name" json:"barista_name"`
 }
 
@@ -853,6 +865,8 @@ func (q *Queries) ListOrdersByLocation(ctx context.Context, arg ListOrdersByLoca
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.CreatedBy,
+			&i.IsComp,
+			&i.CompRecipient,
 			&i.BaristaName,
 		); err != nil {
 			return nil, err
@@ -866,7 +880,7 @@ func (q *Queries) ListOrdersByLocation(ctx context.Context, arg ListOrdersByLoca
 }
 
 const listOrdersByShift = `-- name: ListOrdersByShift :many
-SELECT o.id, o.location_id, o.shift_id, o.barista_id, o.customer_id, o.status, o.subtotal, o.discount_total, o.loyalty_points_used, o.total, o.cost_total, o.receipt_no, o.cancel_reason, o.cancelled_by, o.cancelled_at, o.client_uuid, o.created_at, o.updated_at, o.deleted_at, o.created_by, u.full_name AS barista_name
+SELECT o.id, o.location_id, o.shift_id, o.barista_id, o.customer_id, o.status, o.subtotal, o.discount_total, o.loyalty_points_used, o.total, o.cost_total, o.receipt_no, o.cancel_reason, o.cancelled_by, o.cancelled_at, o.client_uuid, o.created_at, o.updated_at, o.deleted_at, o.created_by, o.is_comp, o.comp_recipient, u.full_name AS barista_name
 FROM orders o
 JOIN users u ON u.id = o.barista_id
 WHERE o.shift_id = $1 AND o.deleted_at IS NULL
@@ -894,6 +908,8 @@ type ListOrdersByShiftRow struct {
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedBy         pgtype.UUID        `db:"created_by" json:"created_by"`
+	IsComp            bool               `db:"is_comp" json:"is_comp"`
+	CompRecipient     string             `db:"comp_recipient" json:"comp_recipient"`
 	BaristaName       string             `db:"barista_name" json:"barista_name"`
 }
 
@@ -927,6 +943,8 @@ func (q *Queries) ListOrdersByShift(ctx context.Context, shiftID pgtype.UUID) ([
 			&i.UpdatedAt,
 			&i.DeletedAt,
 			&i.CreatedBy,
+			&i.IsComp,
+			&i.CompRecipient,
 			&i.BaristaName,
 		); err != nil {
 			return nil, err
@@ -974,7 +992,7 @@ const payOrder = `-- name: PayOrder :one
 UPDATE orders
 SET status = 'paid', updated_at = NOW()
 WHERE id = $1 AND status = 'open'
-RETURNING id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by
+RETURNING id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by, is_comp, comp_recipient
 `
 
 func (q *Queries) PayOrder(ctx context.Context, id pgtype.UUID) (Order, error) {
@@ -1001,6 +1019,8 @@ func (q *Queries) PayOrder(ctx context.Context, id pgtype.UUID) (Order, error) {
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
+		&i.IsComp,
+		&i.CompRecipient,
 	)
 	return i, err
 }

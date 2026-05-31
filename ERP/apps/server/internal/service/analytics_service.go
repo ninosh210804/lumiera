@@ -57,6 +57,28 @@ type BaristaStatsRow struct {
 	ShiftsCount int64     `json:"shifts_count"`
 }
 
+type CompSummaryRow struct {
+	Recipient   string `json:"recipient"`
+	OrdersCount int64  `json:"orders_count"`
+	TotalValue  int64  `json:"total_value"`
+	TotalCost   int64  `json:"total_cost"`
+}
+
+type CompItemRow struct {
+	Recipient   string    `json:"recipient"`
+	ProductID   uuid.UUID `json:"product_id"`
+	ProductName string    `json:"product_name"`
+	Qty         int64     `json:"qty"`
+	TotalValue  int64     `json:"total_value"`
+}
+
+// CompReport bundles the per-recipient tally with the product breakdown of
+// what each recipient took without paying (e.g. Zhandos).
+type CompReport struct {
+	Summary []CompSummaryRow `json:"summary"`
+	Items   []CompItemRow    `json:"items"`
+}
+
 // ─── Methods ──────────────────────────────────────────────────────────────────
 
 func (s *AnalyticsService) GetSalesHeatmap(ctx context.Context, locationID uuid.UUID, from, to time.Time) ([]HeatmapRow, error) {
@@ -146,6 +168,48 @@ func (s *AnalyticsService) GetBaristaStats(ctx context.Context, locationID uuid.
 		})
 	}
 	return out, nil
+}
+
+func (s *AnalyticsService) GetCompReport(ctx context.Context, locationID uuid.UUID, from, to time.Time) (*CompReport, error) {
+	loc := pgtype.UUID{Bytes: locationID, Valid: true}
+	fromTS := pgtype.Timestamptz{Time: from, Valid: true}
+	toTS := pgtype.Timestamptz{Time: to, Valid: true}
+
+	summaryRows, err := s.q.GetCompSummary(ctx, pgdb.GetCompSummaryParams{
+		LocationID: loc, CreatedAt: fromTS, CreatedAt_2: toTS,
+	})
+	if err != nil {
+		return nil, err
+	}
+	itemRows, err := s.q.GetCompItems(ctx, pgdb.GetCompItemsParams{
+		LocationID: loc, CreatedAt: fromTS, CreatedAt_2: toTS,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rep := &CompReport{
+		Summary: make([]CompSummaryRow, 0, len(summaryRows)),
+		Items:   make([]CompItemRow, 0, len(itemRows)),
+	}
+	for _, r := range summaryRows {
+		rep.Summary = append(rep.Summary, CompSummaryRow{
+			Recipient:   r.CompRecipient,
+			OrdersCount: r.OrdersCount,
+			TotalValue:  r.TotalValue,
+			TotalCost:   r.TotalCost,
+		})
+	}
+	for _, r := range itemRows {
+		rep.Items = append(rep.Items, CompItemRow{
+			Recipient:   r.CompRecipient,
+			ProductID:   uuid.UUID(r.ProductID.Bytes),
+			ProductName: r.ProductName,
+			Qty:         r.Qty,
+			TotalValue:  r.TotalValue,
+		})
+	}
+	return rep, nil
 }
 
 func (s *AnalyticsService) RefreshViews(ctx context.Context) error {

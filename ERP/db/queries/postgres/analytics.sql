@@ -37,8 +37,44 @@ WHERE o.location_id = $1
   AND o.status = 'paid'
   AND o.created_at BETWEEN $2 AND $3
   AND o.deleted_at IS NULL
+  AND o.is_comp = FALSE
 GROUP BY u.id, u.full_name
 ORDER BY revenue DESC;
+
+-- name: GetCompSummary :many
+-- Per-recipient tally of products taken without payment (e.g. Zhandos).
+SELECT
+    o.comp_recipient,
+    COUNT(*)::bigint               AS orders_count,
+    ROUND(SUM(o.total))::bigint    AS total_value,
+    ROUND(SUM(o.cost_total))::bigint AS total_cost
+FROM orders o
+WHERE o.location_id = $1
+  AND o.is_comp = TRUE
+  AND o.status = 'paid'
+  AND o.deleted_at IS NULL
+  AND o.created_at BETWEEN $2 AND $3
+GROUP BY o.comp_recipient
+ORDER BY total_value DESC;
+
+-- name: GetCompItems :many
+-- What exactly each recipient took, aggregated by product.
+SELECT
+    o.comp_recipient,
+    oi.product_id,
+    p.name                            AS product_name,
+    ROUND(SUM(oi.qty))::bigint        AS qty,
+    ROUND(SUM(oi.line_total))::bigint AS total_value
+FROM order_items oi
+JOIN orders o   ON o.id = oi.order_id
+JOIN products p ON p.id = oi.product_id
+WHERE o.location_id = $1
+  AND o.is_comp = TRUE
+  AND o.status = 'paid'
+  AND o.deleted_at IS NULL
+  AND o.created_at BETWEEN $2 AND $3
+GROUP BY o.comp_recipient, oi.product_id, p.name
+ORDER BY total_value DESC;
 
 -- The analytics views are now plain VIEWs (see migration 000016), so refresh
 -- is a no-op. We keep the queries so existing code paths and the admin

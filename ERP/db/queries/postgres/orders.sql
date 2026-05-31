@@ -2,11 +2,11 @@
 INSERT INTO orders (
     location_id, shift_id, barista_id, customer_id,
     subtotal, discount_total, loyalty_points_used, total, cost_total,
-    receipt_no, status, client_uuid, created_by
+    receipt_no, status, client_uuid, created_by, is_comp, comp_recipient
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8, $9,
-    $10, 'open', $11, $3
+    $10, 'open', $11, $3, $12, $13
 ) RETURNING *;
 
 -- name: PayOrder :one

@@ -57,7 +57,13 @@ interface CreateOrderRequest {
   loyalty_points_to_use: number;
   client_uuid: string;
   shift_id: string;
+  comp?: boolean;
+  comp_recipient?: string;
 }
+
+// Who takes products off the shelf without paying. Tracked per recipient in
+// Analytics. Extend this list if more people start taking stock on credit.
+const COMP_RECIPIENT = "Жандос";
 
 export default function POSPage() {
   const { user } = useAuth();
@@ -73,22 +79,20 @@ export default function POSPage() {
   const { data: products = [] } = useQuery<ProductDTO[]>({
     queryKey: ["products-pos", locationId],
     queryFn: () =>
-      api.get("/products", { params: { location_id: locationId } })
-        .then((r) => r.data.data ?? []),
+      api.get("/products", { params: { location_id: locationId } }).then((r) => r.data.data ?? []),
     enabled: !!locationId,
   });
 
   const { data: paymentMethods = [] } = useQuery<PaymentMethodDTO[]>({
     queryKey: ["payment-methods"],
-    queryFn: () =>
-      api.get("/orders/payment-methods")
-        .then((r) => r.data.data ?? []),
+    queryFn: () => api.get("/orders/payment-methods").then((r) => r.data.data ?? []),
   });
 
   const { data: activeShift, isLoading: shiftLoading } = useQuery({
     queryKey: ["active-shift"],
     queryFn: () =>
-      api.get("/shifts/active")
+      api
+        .get("/shifts/active")
         .then((r) => r.data.data)
         .catch(() => null),
   });
@@ -114,8 +118,7 @@ export default function POSPage() {
   });
 
   const createOrderMutation = useMutation({
-    mutationFn: (data: CreateOrderRequest) =>
-      api.post("/orders", data),
+    mutationFn: (data: CreateOrderRequest) => api.post("/orders", data),
     onSuccess: () => {
       setCart([]);
       setCustomerPhone("");
@@ -145,8 +148,8 @@ export default function POSPage() {
       products
         .filter((p) => !p.is_stop_listed && p.is_active)
         .map((p) => p.category_name)
-        .filter(Boolean),
-    ),
+        .filter(Boolean)
+    )
   );
 
   // Authoritative price breakdown from the server (applies promo + loyalty).
@@ -239,6 +242,43 @@ export default function POSPage() {
     createOrderMutation.mutate(request);
   };
 
+  // Comp: products taken without payment. No payment is sent; the backend still
+  // deducts ingredients from the warehouse and records it against the recipient.
+  const handleCompOrder = () => {
+    if (cart.length === 0) {
+      alert("Корзина пуста");
+      return;
+    }
+    if (!activeShift) {
+      alert("Смена не открыта");
+      return;
+    }
+    if (
+      !confirm(
+        `${COMP_RECIPIENT} забирает товар на ${subtotal.toLocaleString("ru-RU")} ₸ без оплаты?`
+      )
+    ) {
+      return;
+    }
+
+    const request: CreateOrderRequest = {
+      items: cart.map((item) => ({
+        product_id: item.product_id,
+        qty: item.qty,
+        modifier_option_ids: [],
+      })),
+      payments: [],
+      customer_phone: "",
+      loyalty_points_to_use: 0,
+      client_uuid: crypto.randomUUID(),
+      shift_id: activeShift?.id ?? "",
+      comp: true,
+      comp_recipient: COMP_RECIPIENT,
+    };
+
+    createOrderMutation.mutate(request);
+  };
+
   const handleOpenShift = () => {
     setOpenShiftError("");
     const cash = parseFloat(openingCash || "0");
@@ -264,7 +304,8 @@ export default function POSPage() {
               </span>
               {typeof activeShift.orders_count === "number" && (
                 <span className="text-gray-500 ml-3">
-                  Чеков: {activeShift.orders_count} · {(activeShift.revenue ?? 0).toLocaleString("ru-RU")} ₸
+                  Чеков: {activeShift.orders_count} ·{" "}
+                  {(activeShift.revenue ?? 0).toLocaleString("ru-RU")} ₸
                 </span>
               )}
             </div>
@@ -276,7 +317,11 @@ export default function POSPage() {
               ⚠ Смена не открыта — заказы недоступны
             </span>
             <button
-              onClick={() => { setOpenShiftError(""); setOpeningCash(""); setShowOpenShift(true); }}
+              onClick={() => {
+                setOpenShiftError("");
+                setOpeningCash("");
+                setShowOpenShift(true);
+              }}
               className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-3 py-1.5 rounded transition"
             >
               Открыть смену
@@ -286,194 +331,207 @@ export default function POSPage() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-      {/* Left: Menu/Products */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <h1 className="text-2xl font-bold text-white mb-4">Меню</h1>
+        {/* Left: Menu/Products */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <h1 className="text-2xl font-bold text-white mb-4">Меню</h1>
 
-        {/* Category filter */}
-        {categories.length > 1 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => setActiveCat(null)}
-              className={[
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition",
-                activeCat === null ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600",
-              ].join(" ")}
-            >
-              Все
-            </button>
-            {categories.map((cat) => (
+          {/* Category filter */}
+          {categories.length > 1 && (
+            <div className="flex flex-wrap gap-2 mb-4">
               <button
-                key={cat}
-                onClick={() => setActiveCat(cat)}
+                onClick={() => setActiveCat(null)}
                 className={[
                   "px-3 py-1.5 rounded-lg text-sm font-medium transition",
-                  activeCat === cat ? "bg-emerald-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600",
+                  activeCat === null
+                    ? "bg-emerald-600 text-white"
+                    : "bg-gray-700 text-gray-300 hover:bg-gray-600",
                 ].join(" ")}
               >
-                {cat}
+                Все
               </button>
-            ))}
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCat(cat)}
+                  className={[
+                    "px-3 py-1.5 rounded-lg text-sm font-medium transition",
+                    activeCat === cat
+                      ? "bg-emerald-600 text-white"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600",
+                  ].join(" ")}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            {products
+              .filter((p) => !p.is_stop_listed && p.is_active)
+              .filter((p) => activeCat === null || p.category_name === activeCat)
+              .map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => addToCart(p)}
+                  disabled={!activeShift}
+                  className="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-white p-3 rounded-lg text-sm font-medium transition"
+                >
+                  <div className="text-left">
+                    <div className="font-semibold truncate">{p.name}</div>
+                    <div className="text-gray-300 text-xs">{p.category_name}</div>
+                    {p.sale_price != null ? (
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-gray-500 text-xs line-through">
+                          {p.base_price.toLocaleString("ru-RU")}
+                        </span>
+                        <span className="text-amber-400 font-bold">
+                          {p.sale_price.toLocaleString("ru-RU")} ₸
+                        </span>
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded">
+                          АКЦИЯ
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-emerald-400 font-bold mt-1">
+                        {p.base_price.toLocaleString("ru-RU")} ₸
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
           </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2">
-          {products
-            .filter((p) => !p.is_stop_listed && p.is_active)
-            .filter((p) => activeCat === null || p.category_name === activeCat)
-            .map((p) => (
-              <button
-                key={p.id}
-                onClick={() => addToCart(p)}
-                disabled={!activeShift}
-                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-white p-3 rounded-lg text-sm font-medium transition"
-              >
-                <div className="text-left">
-                  <div className="font-semibold truncate">{p.name}</div>
-                  <div className="text-gray-300 text-xs">{p.category_name}</div>
-                  {p.sale_price != null ? (
-                    <div className="mt-1 flex items-baseline gap-1.5">
-                      <span className="text-gray-500 text-xs line-through">
-                        {p.base_price.toLocaleString("ru-RU")}
-                      </span>
-                      <span className="text-amber-400 font-bold">
-                        {p.sale_price.toLocaleString("ru-RU")} ₸
-                      </span>
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded">АКЦИЯ</span>
-                    </div>
-                  ) : (
-                    <div className="text-emerald-400 font-bold mt-1">
-                      {p.base_price.toLocaleString("ru-RU")} ₸
-                    </div>
-                  )}
-                </div>
-              </button>
-            ))}
         </div>
-      </div>
 
-      {/* Right: Cart & Checkout */}
-      <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-        {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          <h2 className="text-xl font-bold text-white mb-3">Заказ</h2>
-          {cart.length === 0 ? (
-            <div className="text-gray-500 text-center py-8">Корзина пуста</div>
-          ) : (
-            cart.map((item, idx) => (
-              <div key={idx} className="bg-gray-700 p-2 rounded text-sm text-white">
-                <div className="flex justify-between items-start mb-1">
-                  <div className="flex-1">
-                    <div className="font-medium">{item.product_name}</div>
-                    <div className="text-gray-300 text-xs">
-                      {item.unit_price.toLocaleString("ru-RU")} ₸/шт
+        {/* Right: Cart & Checkout */}
+        <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
+          {/* Cart Items */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <h2 className="text-xl font-bold text-white mb-3">Заказ</h2>
+            {cart.length === 0 ? (
+              <div className="text-gray-500 text-center py-8">Корзина пуста</div>
+            ) : (
+              cart.map((item, idx) => (
+                <div key={idx} className="bg-gray-700 p-2 rounded text-sm text-white">
+                  <div className="flex justify-between items-start mb-1">
+                    <div className="flex-1">
+                      <div className="font-medium">{item.product_name}</div>
+                      <div className="text-gray-300 text-xs">
+                        {item.unit_price.toLocaleString("ru-RU")} ₸/шт
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(idx)}
+                      className="text-red-400 hover:text-red-300 font-bold ml-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 justify-between">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateQty(idx, item.qty - 1)}
+                        className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs"
+                      >
+                        −
+                      </button>
+                      <span className="w-8 text-center font-bold">{item.qty}</span>
+                      <button
+                        onClick={() => updateQty(idx, item.qty + 1)}
+                        className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="font-bold text-emerald-400">
+                      {item.line_total.toLocaleString("ru-RU")} ₸
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeFromCart(idx)}
-                    className="text-red-400 hover:text-red-300 font-bold ml-2"
-                  >
-                    ✕
-                  </button>
                 </div>
-                <div className="flex items-center gap-1 justify-between">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => updateQty(idx, item.qty - 1)}
-                      className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs"
-                    >
-                      −
-                    </button>
-                    <span className="w-8 text-center font-bold">{item.qty}</span>
-                    <button
-                      onClick={() => updateQty(idx, item.qty + 1)}
-                      className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="font-bold text-emerald-400">
-                    {item.line_total.toLocaleString("ru-RU")} ₸
-                  </div>
-                </div>
+              ))
+            )}
+          </div>
+
+          {/* Customer Phone */}
+          <div className="border-t border-gray-700 p-4">
+            <label className="block text-gray-300 text-xs font-medium mb-1">
+              Телефон клиента (опционально)
+            </label>
+            <input
+              type="tel"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              placeholder="+7 (700) 000-0000"
+              className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 text-sm"
+            />
+            {quote?.customer_found && (
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className="bg-amber-500/15 text-amber-300 px-2 py-1 rounded-md font-medium">
+                  ☕ Бесплатных: {quote.free_drinks_left}
+                </span>
+                <span className="bg-sky-500/15 text-sky-300 px-2 py-1 rounded-md font-medium">
+                  ★ Баллы: {quote.points_balance.toLocaleString("ru-RU")}
+                </span>
               </div>
-            ))
-          )}
-        </div>
-
-        {/* Customer Phone */}
-        <div className="border-t border-gray-700 p-4">
-          <label className="block text-gray-300 text-xs font-medium mb-1">
-            Телефон клиента (опционально)
-          </label>
-          <input
-            type="tel"
-            value={customerPhone}
-            onChange={(e) => setCustomerPhone(e.target.value)}
-            placeholder="+7 (700) 000-0000"
-            className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 text-sm"
-          />
-          {quote?.customer_found && (
-            <div className="mt-2 flex items-center gap-2 text-xs">
-              <span className="bg-amber-500/15 text-amber-300 px-2 py-1 rounded-md font-medium">
-                ☕ Бесплатных: {quote.free_drinks_left}
-              </span>
-              <span className="bg-sky-500/15 text-sky-300 px-2 py-1 rounded-md font-medium">
-                ★ Баллы: {quote.points_balance.toLocaleString("ru-RU")}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Totals */}
-        <div className="border-t border-gray-700 p-4 space-y-2">
-          {quote?.promo_active && (
-            <div className="bg-emerald-500/15 text-emerald-300 text-xs font-semibold px-2.5 py-1.5 rounded-md text-center">
-              🎉 Акция −{quote.promo_percent}% на всё
-            </div>
-          )}
-          <div className="flex justify-between text-gray-300">
-            <span>Товары:</span>
-            <span>{subtotal.toLocaleString("ru-RU")} ₸</span>
+            )}
           </div>
-          {!!quote && quote.free_coffee_discount > 0 && (
-            <div className="flex justify-between text-amber-300">
-              <span>Бесплатный кофе ×{quote.free_coffees_applied}:</span>
-              <span>−{quote.free_coffee_discount.toLocaleString("ru-RU")} ₸</span>
-            </div>
-          )}
-          {!!quote && quote.promo_discount > 0 && (
-            <div className="flex justify-between text-emerald-300">
-              <span>Скидка −{quote.promo_percent}%:</span>
-              <span>−{quote.promo_discount.toLocaleString("ru-RU")} ₸</span>
-            </div>
-          )}
-          <div className="border-t border-gray-600 pt-2 flex justify-between text-lg font-bold text-white">
-            <span>ИТОГО:</span>
-            <span className="text-emerald-400">{total.toLocaleString("ru-RU")} ₸</span>
-          </div>
-        </div>
 
-        {/* Payment Buttons */}
-        <div className="border-t border-gray-700 p-4 space-y-2">
-          {paymentMethods.slice(0, 2).map((method) => (
+          {/* Totals */}
+          <div className="border-t border-gray-700 p-4 space-y-2">
+            {quote?.promo_active && (
+              <div className="bg-emerald-500/15 text-emerald-300 text-xs font-semibold px-2.5 py-1.5 rounded-md text-center">
+                🎉 Акция −{quote.promo_percent}% на всё
+              </div>
+            )}
+            <div className="flex justify-between text-gray-300">
+              <span>Товары:</span>
+              <span>{subtotal.toLocaleString("ru-RU")} ₸</span>
+            </div>
+            {!!quote && quote.free_coffee_discount > 0 && (
+              <div className="flex justify-between text-amber-300">
+                <span>Бесплатный кофе ×{quote.free_coffees_applied}:</span>
+                <span>−{quote.free_coffee_discount.toLocaleString("ru-RU")} ₸</span>
+              </div>
+            )}
+            {!!quote && quote.promo_discount > 0 && (
+              <div className="flex justify-between text-emerald-300">
+                <span>Скидка −{quote.promo_percent}%:</span>
+                <span>−{quote.promo_discount.toLocaleString("ru-RU")} ₸</span>
+              </div>
+            )}
+            <div className="border-t border-gray-600 pt-2 flex justify-between text-lg font-bold text-white">
+              <span>ИТОГО:</span>
+              <span className="text-emerald-400">{total.toLocaleString("ru-RU")} ₸</span>
+            </div>
+          </div>
+
+          {/* Payment Buttons */}
+          <div className="border-t border-gray-700 p-4 space-y-2">
+            {paymentMethods.slice(0, 2).map((method) => (
+              <button
+                key={method.id}
+                onClick={() => handleSubmitOrder(method.code)}
+                disabled={createOrderMutation.isPending || cart.length === 0 || !activeShift}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 rounded transition"
+              >
+                {createOrderMutation.isPending ? "Обработка..." : `${method.name}`}
+              </button>
+            ))}
             <button
-              key={method.id}
-              onClick={() => handleSubmitOrder(method.code)}
+              onClick={handleCompOrder}
               disabled={createOrderMutation.isPending || cart.length === 0 || !activeShift}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 rounded transition"
+              className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 rounded transition"
             >
-              {createOrderMutation.isPending ? "Обработка..." : `${method.name}`}
+              {`${COMP_RECIPIENT} забрал (без оплаты)`}
             </button>
-          ))}
-          <button
-            onClick={() => setCart([])}
-            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded transition"
-          >
-            Отмена
-          </button>
+            <button
+              onClick={() => setCart([])}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded transition"
+            >
+              Отмена
+            </button>
+          </div>
         </div>
-      </div>
       </div>
 
       {/* Open shift modal */}
@@ -483,7 +541,10 @@ export default function POSPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900">Открыть смену</h3>
               <button
-                onClick={() => { setShowOpenShift(false); setOpenShiftError(""); }}
+                onClick={() => {
+                  setShowOpenShift(false);
+                  setOpenShiftError("");
+                }}
                 className="text-gray-400 hover:text-gray-600 text-xl leading-none"
               >
                 ×
@@ -504,13 +565,14 @@ export default function POSPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
                   autoFocus
                 />
-                {openShiftError && (
-                  <p className="text-xs text-red-500 mt-1">{openShiftError}</p>
-                )}
+                {openShiftError && <p className="text-xs text-red-500 mt-1">{openShiftError}</p>}
               </div>
               <div className="flex gap-2 justify-end">
                 <button
-                  onClick={() => { setShowOpenShift(false); setOpenShiftError(""); }}
+                  onClick={() => {
+                    setShowOpenShift(false);
+                    setOpenShiftError("");
+                  }}
                   className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition"
                 >
                   Отмена

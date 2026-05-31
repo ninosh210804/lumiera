@@ -106,6 +106,12 @@ type CreateOrderInput struct {
 	ClientUUID         uuid.UUID
 	Items              []OrderItemInput
 	Payments           []PaymentInput
+
+	// Comp marks an order as products taken without payment (e.g. Zhandos took
+	// stock off the shelf). Ingredients are still deducted from the warehouse,
+	// but the order is excluded from revenue and tracked as a debt per recipient.
+	Comp          bool
+	CompRecipient string
 }
 
 type OrderItemInput struct {
@@ -274,7 +280,9 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		loyaltyAccountID pgtype.UUID
 		custState        loyaltyState
 	)
-	if in.CustomerPhone != "" {
+	// Comps carry no payment and earn no loyalty; ignore any phone/loyalty input
+	// and charge full retail value so the recipient's tally reflects real cost.
+	if in.CustomerPhone != "" && !in.Comp {
 		custID, loyAcctID, st, err := getOrCreateCustomer(ctx, q, in.CustomerPhone)
 		if err != nil {
 			return nil, err
@@ -285,16 +293,21 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 	}
 
 	disc := computeDiscounts(subtotal, coffeeUnitPrices, custState, cfg, in.LoyaltyPointsToUse)
+	if in.Comp {
+		disc = discountResult{Total: subtotal}
+	}
 	loyaltyPointsUsed := disc.PointsUsed
 	total := disc.Total
 
-	var paymentSum float64
-	for _, p := range in.Payments {
-		paymentSum += p.Amount
-	}
-	if math.Abs(paymentSum-total) > 0.01 {
-		return nil, domain.NewBadRequest(fmt.Sprintf(
-			"payment sum %.2f does not match order total %.2f", paymentSum, total))
+	if !in.Comp {
+		var paymentSum float64
+		for _, p := range in.Payments {
+			paymentSum += p.Amount
+		}
+		if math.Abs(paymentSum-total) > 0.01 {
+			return nil, domain.NewBadRequest(fmt.Sprintf(
+				"payment sum %.2f does not match order total %.2f", paymentSum, total))
+		}
 	}
 
 	receiptNo := "000001"
@@ -326,6 +339,8 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		CostTotal:         numericFromFloat(costTotal),
 		ReceiptNo:         receiptNo,
 		ClientUuid:        pgtype.UUID{Bytes: clientUUID, Valid: true},
+		IsComp:            in.Comp,
+		CompRecipient:     in.CompRecipient,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
@@ -351,6 +366,9 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		// Deduct ingredient stock for this line (recipe-driven consumption).
 		for _, d := range ci.deductions {
 			saleReason := "sale"
+			if in.Comp {
+				saleReason = "staff" // products taken off the shelf, not sold
+			}
 			if _, err := q.CreateStockMovement(ctx, pgdb.CreateStockMovementParams{
 				LocationID:       pgtype.UUID{Bytes: in.LocationID, Valid: true},
 				IngredientID:     pgtype.UUID{Bytes: d.ingredientID, Valid: true},

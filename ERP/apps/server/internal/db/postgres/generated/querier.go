@@ -62,6 +62,10 @@ type Querier interface {
 	GetAllOrderItemModifiers(ctx context.Context, orderID pgtype.UUID) ([]GetAllOrderItemModifiersRow, error)
 	GetBaristaStats(ctx context.Context, arg GetBaristaStatsParams) ([]GetBaristaStatsRow, error)
 	GetCategory(ctx context.Context, id pgtype.UUID) (Category, error)
+	// What exactly each recipient took, aggregated by product.
+	GetCompItems(ctx context.Context, arg GetCompItemsParams) ([]GetCompItemsRow, error)
+	// Per-recipient tally of products taken without payment (e.g. Zhandos).
+	GetCompSummary(ctx context.Context, arg GetCompSummaryParams) ([]GetCompSummaryRow, error)
 	GetCustomerByPhone(ctx context.Context, phone string) (Customer, error)
 	GetDailyRevenue(ctx context.Context, arg GetDailyRevenueParams) ([]MvDailyRevenue, error)
 	GetIngredient(ctx context.Context, id pgtype.UUID) (Ingredient, error)

@@ -271,6 +271,8 @@ type Order struct {
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedBy         pgtype.UUID        `db:"created_by" json:"created_by"`
+	IsComp            bool               `db:"is_comp" json:"is_comp"`
+	CompRecipient     string             `db:"comp_recipient" json:"comp_recipient"`
 }
 
 type OrderItem struct {

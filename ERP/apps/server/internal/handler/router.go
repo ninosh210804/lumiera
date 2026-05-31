@@ -238,6 +238,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 			r.Get("/products", analyticsH.productABC)
 			r.Get("/revenue", analyticsH.dailyRevenue)
 			r.Get("/baristas", analyticsH.baristaStats)
+			r.Get("/comps", analyticsH.comps)
 			r.Post("/refresh", analyticsH.refreshViews)
 		})
 

@@ -25,6 +25,7 @@ WHERE o.location_id = $1
   AND o.status = 'paid'
   AND o.created_at BETWEEN $2 AND $3
   AND o.deleted_at IS NULL
+  AND o.is_comp = FALSE
 GROUP BY u.id, u.full_name
 ORDER BY revenue DESC
 `
@@ -60,6 +61,121 @@ func (q *Queries) GetBaristaStats(ctx context.Context, arg GetBaristaStatsParams
 			&i.Revenue,
 			&i.AvgCheck,
 			&i.ShiftsCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCompItems = `-- name: GetCompItems :many
+SELECT
+    o.comp_recipient,
+    oi.product_id,
+    p.name                            AS product_name,
+    ROUND(SUM(oi.qty))::bigint        AS qty,
+    ROUND(SUM(oi.line_total))::bigint AS total_value
+FROM order_items oi
+JOIN orders o   ON o.id = oi.order_id
+JOIN products p ON p.id = oi.product_id
+WHERE o.location_id = $1
+  AND o.is_comp = TRUE
+  AND o.status = 'paid'
+  AND o.deleted_at IS NULL
+  AND o.created_at BETWEEN $2 AND $3
+GROUP BY o.comp_recipient, oi.product_id, p.name
+ORDER BY total_value DESC
+`
+
+type GetCompItemsParams struct {
+	LocationID  pgtype.UUID        `db:"location_id" json:"location_id"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	CreatedAt_2 pgtype.Timestamptz `db:"created_at_2" json:"created_at_2"`
+}
+
+type GetCompItemsRow struct {
+	CompRecipient string      `db:"comp_recipient" json:"comp_recipient"`
+	ProductID     pgtype.UUID `db:"product_id" json:"product_id"`
+	ProductName   string      `db:"product_name" json:"product_name"`
+	Qty           int64       `db:"qty" json:"qty"`
+	TotalValue    int64       `db:"total_value" json:"total_value"`
+}
+
+// What exactly each recipient took, aggregated by product.
+func (q *Queries) GetCompItems(ctx context.Context, arg GetCompItemsParams) ([]GetCompItemsRow, error) {
+	rows, err := q.db.Query(ctx, getCompItems, arg.LocationID, arg.CreatedAt, arg.CreatedAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCompItemsRow
+	for rows.Next() {
+		var i GetCompItemsRow
+		if err := rows.Scan(
+			&i.CompRecipient,
+			&i.ProductID,
+			&i.ProductName,
+			&i.Qty,
+			&i.TotalValue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCompSummary = `-- name: GetCompSummary :many
+SELECT
+    o.comp_recipient,
+    COUNT(*)::bigint               AS orders_count,
+    ROUND(SUM(o.total))::bigint    AS total_value,
+    ROUND(SUM(o.cost_total))::bigint AS total_cost
+FROM orders o
+WHERE o.location_id = $1
+  AND o.is_comp = TRUE
+  AND o.status = 'paid'
+  AND o.deleted_at IS NULL
+  AND o.created_at BETWEEN $2 AND $3
+GROUP BY o.comp_recipient
+ORDER BY total_value DESC
+`
+
+type GetCompSummaryParams struct {
+	LocationID  pgtype.UUID        `db:"location_id" json:"location_id"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	CreatedAt_2 pgtype.Timestamptz `db:"created_at_2" json:"created_at_2"`
+}
+
+type GetCompSummaryRow struct {
+	CompRecipient string `db:"comp_recipient" json:"comp_recipient"`
+	OrdersCount   int64  `db:"orders_count" json:"orders_count"`
+	TotalValue    int64  `db:"total_value" json:"total_value"`
+	TotalCost     int64  `db:"total_cost" json:"total_cost"`
+}
+
+// Per-recipient tally of products taken without payment (e.g. Zhandos).
+func (q *Queries) GetCompSummary(ctx context.Context, arg GetCompSummaryParams) ([]GetCompSummaryRow, error) {
+	rows, err := q.db.Query(ctx, getCompSummary, arg.LocationID, arg.CreatedAt, arg.CreatedAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCompSummaryRow
+	for rows.Next() {
+		var i GetCompSummaryRow
+		if err := rows.Scan(
+			&i.CompRecipient,
+			&i.OrdersCount,
+			&i.TotalValue,
+			&i.TotalCost,
 		); err != nil {
 			return nil, err
 		}

@@ -125,7 +125,7 @@ func (q *Queries) GetMenuSnapshot(ctx context.Context, locationID pgtype.UUID) (
 }
 
 const getOrderByClientUUID = `-- name: GetOrderByClientUUID :one
-SELECT id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by FROM orders WHERE client_uuid = $1
+SELECT id, location_id, shift_id, barista_id, customer_id, status, subtotal, discount_total, loyalty_points_used, total, cost_total, receipt_no, cancel_reason, cancelled_by, cancelled_at, client_uuid, created_at, updated_at, deleted_at, created_by, is_comp, comp_recipient FROM orders WHERE client_uuid = $1
 `
 
 func (q *Queries) GetOrderByClientUUID(ctx context.Context, clientUuid pgtype.UUID) (Order, error) {
@@ -152,6 +152,8 @@ func (q *Queries) GetOrderByClientUUID(ctx context.Context, clientUuid pgtype.UU
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
+		&i.IsComp,
+		&i.CompRecipient,
 	)
 	return i, err
 }
