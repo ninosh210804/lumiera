@@ -145,11 +145,18 @@ type Querier interface {
 	ReceivePurchaseOrder(ctx context.Context, arg ReceivePurchaseOrderParams) (PurchaseOrder, error)
 	RefreshDailyRevenue(ctx context.Context) error
 	RefreshProductABC(ctx context.Context) error
+	// The analytics views are now plain VIEWs (see migration 000016), so refresh
+	// is a no-op. We keep the queries so existing code paths and the admin
+	// "Обновить" button still compile and respond; SELECT 1 is just a fast ping
+	// that keeps the response shape and lets the frontend display "Обновлено".
 	RefreshSalesHeatmap(ctx context.Context) error
 	RegisterDevice(ctx context.Context, arg RegisterDeviceParams) (DeviceRegistry, error)
 	RemoveRecipeItem(ctx context.Context, id pgtype.UUID) error
 	RemoveSaleEventItem(ctx context.Context, arg RemoveSaleEventItemParams) error
 	ResolveConflict(ctx context.Context, arg ResolveConflictParams) (SyncConflict, error)
+	// Manually override the moving-average cost. Used by the warehouse "edit
+	// товар" dialog so admins can correct mistyped purchase prices (#3 / #5).
+	SetIngredientCost(ctx context.Context, arg SetIngredientCostParams) (Ingredient, error)
 	SetLoyaltyRule(ctx context.Context, arg SetLoyaltyRuleParams) (LoyaltyRule, error)
 	SetProductStopList(ctx context.Context, arg SetProductStopListParams) error
 	SetSaleEventActive(ctx context.Context, arg SetSaleEventActiveParams) (SaleEvent, error)

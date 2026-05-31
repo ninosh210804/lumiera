@@ -25,6 +25,14 @@ SET name = $2, unit = $3, is_perishable = $4, default_shelf_life_days = $5, min_
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
+-- name: SetIngredientCost :one
+-- Manually override the moving-average cost. Used by the warehouse "edit
+-- товар" dialog so admins can correct mistyped purchase prices (#3 / #5).
+UPDATE ingredients
+SET current_avg_cost = $2
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
 -- name: SoftDeleteIngredient :exec
 UPDATE ingredients SET deleted_at = NOW() WHERE id = $1;
 

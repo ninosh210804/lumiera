@@ -108,6 +108,14 @@ type UpdateIngredientInput struct {
 	DefaultShelfLifeDays *int32
 	MinStockAlert        float64
 	IsActive             bool
+	// Optional manual overrides used by the warehouse edit dialog (/5).
+	// When non-nil they replace current_qty / current_avg_cost — qty via an
+	// "adjustment" stock_movement so the trigger keeps batches consistent,
+	// cost via a direct write (the trigger only weighted-averages on
+	// positive movements, so there's no other way to correct it).
+	CurrentQty     *float64
+	CurrentAvgCost *float64
+	CreatedBy      uuid.UUID
 }
 
 func (s *IngredientService) Update(ctx context.Context, in UpdateIngredientInput) (*IngredientDTO, error) {
@@ -123,6 +131,55 @@ func (s *IngredientService) Update(ctx context.Context, in UpdateIngredientInput
 	if err != nil {
 		return nil, fmt.Errorf("update ingredient: %w", err)
 	}
+
+	// Stock qty override → log an adjustment movement so the trigger updates
+	// current_qty and we keep an audit trail. Only fire when the requested
+	// qty actually differs from what's there.
+	if in.CurrentQty != nil {
+		currentQty := floatFromNumeric(row.CurrentQty)
+		delta := *in.CurrentQty - currentQty
+		if delta != 0 {
+			note := "manual stock override"
+			_, err := s.q.CreateStockMovement(ctx, pgdb.CreateStockMovementParams{
+				LocationID:       row.LocationID,
+				IngredientID:     pgtype.UUID{Bytes: in.ID, Valid: true},
+				BatchID:          pgtype.UUID{},
+				QtyDelta:         numericFromFloat(delta),
+				UnitCostSnapshot: row.CurrentAvgCost,
+				Reason:           "adjustment",
+				OrderID:          pgtype.UUID{},
+				InventoryCountID: pgtype.UUID{},
+				Note:             &note,
+				ClientUuid:       pgtype.UUID{Bytes: uuid.New(), Valid: true},
+				CreatedBy:        pgtype.UUID{Bytes: in.CreatedBy, Valid: true},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("adjust stock: %w", err)
+			}
+		}
+	}
+
+	// Cost override → direct write (cost-update trigger only kicks in on
+	// positive movements, so we cannot piggy-back on the qty adjustment).
+	if in.CurrentAvgCost != nil {
+		row2, err := s.q.SetIngredientCost(ctx, pgdb.SetIngredientCostParams{
+			ID:             pgtype.UUID{Bytes: in.ID, Valid: true},
+			CurrentAvgCost: numericFromFloat(*in.CurrentAvgCost),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("set cost: %w", err)
+		}
+		row = row2
+	}
+
+	// Re-fetch in case the trigger updated qty above.
+	if in.CurrentQty != nil {
+		latest, err := s.q.GetIngredient(ctx, pgtype.UUID{Bytes: in.ID, Valid: true})
+		if err == nil {
+			row = latest
+		}
+	}
+
 	dto := ingredientToDTO(row)
 	return &dto, nil
 }

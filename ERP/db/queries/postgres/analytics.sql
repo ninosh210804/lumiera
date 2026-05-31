@@ -40,11 +40,16 @@ WHERE o.location_id = $1
 GROUP BY u.id, u.full_name
 ORDER BY revenue DESC;
 
+-- The analytics views are now plain VIEWs (see migration 000016), so refresh
+-- is a no-op. We keep the queries so existing code paths and the admin
+-- "Обновить" button still compile and respond; SELECT 1 is just a fast ping
+-- that keeps the response shape and lets the frontend display "Обновлено".
+
 -- name: RefreshSalesHeatmap :exec
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_sales_heatmap;
+SELECT 1;
 
 -- name: RefreshProductABC :exec
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_product_abc;
+SELECT 1;
 
 -- name: RefreshDailyRevenue :exec
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_revenue;
+SELECT 1;

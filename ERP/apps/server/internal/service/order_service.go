@@ -235,7 +235,14 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 				}
 				perUnit := floatFromNumeric(ri.Qty)
 				avgCost := floatFromNumeric(ri.CurrentAvgCost)
-				consumed := perUnit * item.Qty
+				// Convert recipe qty into the ingredient's storage unit so
+				// stock deductions and cost match — see units.go and /3.
+				ingUnit := ri.Unit
+				if ri.IngredientUnit != nil {
+					ingUnit = *ri.IngredientUnit
+				}
+				perUnitInIngUnit := convertQty(perUnit, ri.Unit, ingUnit)
+				consumed := perUnitInIngUnit * item.Qty
 				lineCost += consumed * avgCost
 				deductions = append(deductions, ingredientDeduction{
 					ingredientID: uuid.UUID(ri.IngredientID.Bytes),

@@ -991,6 +991,43 @@ func (q *Queries) ReceivePurchaseOrder(ctx context.Context, arg ReceivePurchaseO
 	return i, err
 }
 
+const setIngredientCost = `-- name: SetIngredientCost :one
+UPDATE ingredients
+SET current_avg_cost = $2
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, location_id, name, unit, is_perishable, default_shelf_life_days, min_stock_alert, cost_method, current_avg_cost, current_qty, is_active, created_at, updated_at, deleted_at, created_by
+`
+
+type SetIngredientCostParams struct {
+	ID             pgtype.UUID    `db:"id" json:"id"`
+	CurrentAvgCost pgtype.Numeric `db:"current_avg_cost" json:"current_avg_cost"`
+}
+
+// Manually override the moving-average cost. Used by the warehouse "edit
+// товар" dialog so admins can correct mistyped purchase prices (#3 / #5).
+func (q *Queries) SetIngredientCost(ctx context.Context, arg SetIngredientCostParams) (Ingredient, error) {
+	row := q.db.QueryRow(ctx, setIngredientCost, arg.ID, arg.CurrentAvgCost)
+	var i Ingredient
+	err := row.Scan(
+		&i.ID,
+		&i.LocationID,
+		&i.Name,
+		&i.Unit,
+		&i.IsPerishable,
+		&i.DefaultShelfLifeDays,
+		&i.MinStockAlert,
+		&i.CostMethod,
+		&i.CurrentAvgCost,
+		&i.CurrentQty,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const softDeleteIngredient = `-- name: SoftDeleteIngredient :exec
 UPDATE ingredients SET deleted_at = NOW() WHERE id = $1
 `

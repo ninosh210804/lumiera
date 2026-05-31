@@ -57,22 +57,22 @@ export default function WarehousePage() {
   const { data: ingredients = [] } = useQuery<IngredientDTO[]>({
     queryKey: ["ingredients-warehouse", locationId],
     queryFn: () =>
-      api.get("/ingredients", { params: { location_id: locationId } })
+      api
+        .get("/ingredients", { params: { location_id: locationId } })
         .then((r) => r.data.data ?? []),
     enabled: !!locationId,
   });
 
   const { data: suppliers = [] } = useQuery<SupplierDTO[]>({
     queryKey: ["suppliers"],
-    queryFn: () =>
-      api.get("/suppliers")
-        .then((r) => r.data.data ?? []),
+    queryFn: () => api.get("/suppliers").then((r) => r.data.data ?? []),
   });
 
   const { data: movements = [] } = useQuery<StockMovementDTO[]>({
     queryKey: ["stock-movements-warehouse", locationId, tab],
     queryFn: () =>
-      api.get("/stock/movements", { params: { location_id: locationId } })
+      api
+        .get("/stock/movements", { params: { location_id: locationId } })
         .then((r) => r.data.data ?? []),
     enabled: !!locationId && tab === "history",
   });
@@ -117,7 +117,11 @@ export default function WarehousePage() {
     ]);
   };
 
-  const updateRefillItem = (idx: number, field: string, value: any) => {
+  const updateRefillItem = <K extends keyof RefillItem>(
+    idx: number,
+    field: K,
+    value: RefillItem[K]
+  ) => {
     const updated = [...refillItems];
     updated[idx] = { ...updated[idx], [field]: value };
     setRefillItems(updated);
@@ -150,10 +154,7 @@ export default function WarehousePage() {
     (i) => i.current_qty <= i.min_stock_alert && i.min_stock_alert > 0
   );
 
-  const totalRefillCost = refillItems.reduce(
-    (sum, item) => sum + item.qty * item.unit_cost,
-    0
-  );
+  const totalRefillCost = refillItems.reduce((sum, item) => sum + item.qty * item.unit_cost, 0);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -269,9 +270,7 @@ export default function WarehousePage() {
 
               {/* Notes */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Примечания
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Примечания</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -293,15 +292,10 @@ export default function WarehousePage() {
                     {refillItems.map((item, idx) => {
                       const ingredient = ingredients.find((i) => i.id === item.ingredient_id);
                       return (
-                        <div
-                          key={idx}
-                          className="border border-gray-200 rounded-lg p-3 bg-gray-50"
-                        >
+                        <div key={idx} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <div className="font-medium text-gray-900">
-                                {ingredient?.name}
-                              </div>
+                              <div className="font-medium text-gray-900">{ingredient?.name}</div>
                               <div className="text-xs text-gray-500">
                                 Ед. изм.: {ingredient?.unit}
                               </div>
@@ -316,9 +310,7 @@ export default function WarehousePage() {
 
                           <div className="grid grid-cols-3 gap-2">
                             <div>
-                              <label className="text-xs text-gray-600 mb-1 block">
-                                Кол-во
-                              </label>
+                              <label className="text-xs text-gray-600 mb-1 block">Кол-во</label>
                               <input
                                 type="number"
                                 value={item.qty}
@@ -338,7 +330,11 @@ export default function WarehousePage() {
                                 type="number"
                                 value={item.unit_cost}
                                 onChange={(e) =>
-                                  updateRefillItem(idx, "unit_cost", parseFloat(e.target.value) || 0)
+                                  updateRefillItem(
+                                    idx,
+                                    "unit_cost",
+                                    parseFloat(e.target.value) || 0
+                                  )
                                 }
                                 step="0.01"
                                 min="0"
@@ -346,9 +342,7 @@ export default function WarehousePage() {
                               />
                             </div>
                             <div>
-                              <label className="text-xs text-gray-600 mb-1 block">
-                                Сумма
-                              </label>
+                              <label className="text-xs text-gray-600 mb-1 block">Сумма</label>
                               <div className="px-2 py-1 bg-white border border-gray-300 rounded text-sm font-medium">
                                 {(item.qty * item.unit_cost).toLocaleString("ru-RU")}
                               </div>
@@ -380,9 +374,7 @@ export default function WarehousePage() {
               {/* Totals & Submit */}
               <div className="border-t border-gray-200 pt-4">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-semibold text-gray-900">
-                    Общая сумма:
-                  </span>
+                  <span className="text-lg font-semibold text-gray-900">Общая сумма:</span>
                   <span className="text-2xl font-bold text-blue-600">
                     {totalRefillCost.toLocaleString("ru-RU")} ₸
                   </span>
@@ -404,9 +396,7 @@ export default function WarehousePage() {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Товар
-                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Товар</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Операция
                 </th>
@@ -416,9 +406,7 @@ export default function WarehousePage() {
                 <th className="px-6 py-3 text-right text-sm font-semibold text-gray-900">
                   Стоимость
                 </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Дата
-                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Дата</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Примечание
                 </th>
@@ -443,23 +431,24 @@ export default function WarehousePage() {
                           m.reason === "purchase"
                             ? "bg-emerald-50 text-emerald-700"
                             : m.reason === "sale"
-                            ? "bg-blue-50 text-blue-700"
-                            : m.reason === "waste"
-                            ? "bg-red-50 text-red-700"
-                            : "bg-gray-50 text-gray-700"
+                              ? "bg-blue-50 text-blue-700"
+                              : m.reason === "waste"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-gray-50 text-gray-700"
                         }`}
                       >
                         {m.reason === "purchase"
                           ? "Приход"
                           : m.reason === "sale"
-                          ? "Продажа"
-                          : m.reason === "waste"
-                          ? "Отход"
-                          : m.reason}
+                            ? "Продажа"
+                            : m.reason === "waste"
+                              ? "Отход"
+                              : m.reason}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-sm text-right font-medium">
-                      {m.qty_delta > 0 ? "+" : ""}{m.qty_delta.toFixed(2)}
+                      {m.qty_delta > 0 ? "+" : ""}
+                      {m.qty_delta.toFixed(2)}
                     </td>
                     <td className="px-6 py-3 text-sm text-right text-gray-600">
                       {(Math.abs(m.qty_delta) * (m.unit_cost ?? 0)).toLocaleString("ru-RU")} ₸
@@ -531,6 +520,15 @@ function IngredientModal({
   const [shelfLife, setShelfLife] = useState(
     ingredient?.default_shelf_life_days != null ? String(ingredient.default_shelf_life_days) : ""
   );
+  // Edit-only: let admins correct остаток + цена directly. We capture the
+  // initial values so we only send them to the API when they actually
+  // changed — otherwise we'd log a no-op stock movement on every save.
+  const [currentQty, setCurrentQty] = useState(
+    ingredient?.current_qty != null ? String(ingredient.current_qty) : ""
+  );
+  const [currentAvgCost, setCurrentAvgCost] = useState(
+    ingredient?.current_avg_cost != null ? String(ingredient.current_avg_cost) : ""
+  );
   const [error, setError] = useState("");
 
   const save = useMutation({
@@ -544,6 +542,14 @@ function IngredientModal({
       };
       if (isEdit) {
         body.is_active = ingredient!.is_active;
+        const qtyNum = currentQty === "" ? null : Number(currentQty);
+        const costNum = currentAvgCost === "" ? null : Number(currentAvgCost);
+        if (qtyNum != null && !Number.isNaN(qtyNum) && qtyNum !== ingredient!.current_qty) {
+          body.current_qty = qtyNum;
+        }
+        if (costNum != null && !Number.isNaN(costNum) && costNum !== ingredient!.current_avg_cost) {
+          body.current_avg_cost = costNum;
+        }
         return api.put(`/ingredients/${ingredient!.id}`, body);
       }
       return api.post("/ingredients", body);
@@ -559,50 +565,140 @@ function IngredientModal({
     e.preventDefault();
     setError("");
     if (!name.trim()) return setError("Введите название");
+    if (isEdit && currentQty !== "" && Number.isNaN(Number(currentQty))) {
+      return setError("Некорректный остаток");
+    }
+    if (isEdit && currentAvgCost !== "" && Number.isNaN(Number(currentAvgCost))) {
+      return setError("Некорректная цена");
+    }
     save.mutate();
   }
 
-  const field = "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition";
+  const field =
+    "w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition";
   const label = "block text-sm font-medium text-gray-700 mb-1";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">
             {isEdit ? "Редактировать товар" : "Новый товар на склад"}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          >
+            ×
+          </button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
             <label className={label}>Название</label>
-            <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Молоко цельное" autoFocus />
+            <input
+              className={field}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Молоко цельное"
+              autoFocus
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>Единица</label>
               <select className={field} value={unit} onChange={(e) => setUnit(e.target.value)}>
                 {UNIT_OPTIONS.map((u) => (
-                  <option key={u.value} value={u.value}>{u.label}</option>
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
               <label className={label}>Мин. остаток</label>
-              <input className={field} type="number" min="0" step="any" value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder="0" />
+              <input
+                className={field}
+                type="number"
+                min="0"
+                step="any"
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value)}
+                placeholder="0"
+              />
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={perishable} onChange={(e) => setPerishable(e.target.checked)} className="rounded" />
+            <input
+              type="checkbox"
+              checked={perishable}
+              onChange={(e) => setPerishable(e.target.checked)}
+              className="rounded"
+            />
             Скоропортящийся
           </label>
           {perishable && (
             <div>
               <label className={label}>Срок годности (дней)</label>
-              <input className={field} type="number" min="0" value={shelfLife} onChange={(e) => setShelfLife(e.target.value)} placeholder="7" />
+              <input
+                className={field}
+                type="number"
+                min="0"
+                value={shelfLife}
+                onChange={(e) => setShelfLife(e.target.value)}
+                placeholder="7"
+              />
             </div>
           )}
+
+          {isEdit && (
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Корректировка склада
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={label}>Остаток ({unit})</label>
+                  <input
+                    className={field}
+                    type="number"
+                    step="any"
+                    value={currentQty}
+                    onChange={(e) => setCurrentQty(e.target.value)}
+                    placeholder="0"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Текущее: {ingredient!.current_qty.toLocaleString("ru-RU")} {ingredient!.unit}
+                  </p>
+                </div>
+                <div>
+                  <label className={label}>Цена ₸ / {unit}</label>
+                  <input
+                    className={field}
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={currentAvgCost}
+                    onChange={(e) => setCurrentAvgCost(e.target.value)}
+                    placeholder="0"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Текущая: {ingredient!.current_avg_cost.toLocaleString("ru-RU")} ₸
+                  </p>
+                </div>
+              </div>
+              <p className="text-[11px] text-amber-600">
+                Изменение остатка создаёт корректировочное движение склада. Цена переписывается
+                напрямую.
+              </p>
+            </div>
+          )}
+
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
           <button
             type="submit"
@@ -610,8 +706,12 @@ function IngredientModal({
             className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-500 transition disabled:opacity-50"
           >
             {save.isPending
-              ? (isEdit ? "Сохранение…" : "Создание…")
-              : (isEdit ? "Сохранить" : "Создать товар")}
+              ? isEdit
+                ? "Сохранение…"
+                : "Создание…"
+              : isEdit
+                ? "Сохранить"
+                : "Создать товар"}
           </button>
         </form>
       </div>

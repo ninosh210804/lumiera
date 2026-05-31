@@ -216,7 +216,7 @@ func (q *Queries) GetSalesHeatmap(ctx context.Context, arg GetSalesHeatmapParams
 }
 
 const refreshDailyRevenue = `-- name: RefreshDailyRevenue :exec
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_revenue
+SELECT 1
 `
 
 func (q *Queries) RefreshDailyRevenue(ctx context.Context) error {
@@ -225,7 +225,7 @@ func (q *Queries) RefreshDailyRevenue(ctx context.Context) error {
 }
 
 const refreshProductABC = `-- name: RefreshProductABC :exec
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_product_abc
+SELECT 1
 `
 
 func (q *Queries) RefreshProductABC(ctx context.Context) error {
@@ -234,9 +234,14 @@ func (q *Queries) RefreshProductABC(ctx context.Context) error {
 }
 
 const refreshSalesHeatmap = `-- name: RefreshSalesHeatmap :exec
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_sales_heatmap
+
+SELECT 1
 `
 
+// The analytics views are now plain VIEWs (see migration 000016), so refresh
+// is a no-op. We keep the queries so existing code paths and the admin
+// "Обновить" button still compile and respond; SELECT 1 is just a fast ping
+// that keeps the response shape and lets the frontend display "Обновлено".
 func (q *Queries) RefreshSalesHeatmap(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, refreshSalesHeatmap)
 	return err

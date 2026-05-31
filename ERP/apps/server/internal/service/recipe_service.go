@@ -266,7 +266,14 @@ func recipeItemToDTO(r pgdb.GetRecipeItemsRow) RecipeItemDTO {
 		id := uuid.UUID(r.SubRecipeID.Bytes)
 		dto.SubRecipeID = &id
 	}
-	dto.LineCost = dto.Qty * dto.UnitCost
+	// current_avg_cost is per ingredient.unit; convert recipe qty into that
+	// unit before multiplying, otherwise mixing g/kg or ml/l gives a 1000x-
+	// wrong cost.
+	ingUnit := dto.Unit
+	if r.IngredientUnit != nil {
+		ingUnit = *r.IngredientUnit
+	}
+	dto.LineCost = convertQty(dto.Qty, dto.Unit, ingUnit) * dto.UnitCost
 	return dto
 }
 

@@ -97,12 +97,16 @@ func (h *inventoryHandler) createIngredient(w http.ResponseWriter, r *http.Reque
 
 // PUT /api/v1/ingredients/{id}
 type updateIngredientRequest struct {
-	Name                 string  `json:"name"`
-	Unit                 string  `json:"unit"`
-	IsPerishable         bool    `json:"is_perishable"`
-	DefaultShelfLifeDays *int32  `json:"default_shelf_life_days"`
-	MinStockAlert        float64 `json:"min_stock_alert"`
-	IsActive             bool    `json:"is_active"`
+	Name                 string   `json:"name"`
+	Unit                 string   `json:"unit"`
+	IsPerishable         bool     `json:"is_perishable"`
+	DefaultShelfLifeDays *int32   `json:"default_shelf_life_days"`
+	MinStockAlert        float64  `json:"min_stock_alert"`
+	IsActive             bool     `json:"is_active"`
+	// Optional — admins can correct stock qty / avg cost from the warehouse
+	// edit dialog. Omit (or send null) to leave them untouched.
+	CurrentQty     *float64 `json:"current_qty,omitempty"`
+	CurrentAvgCost *float64 `json:"current_avg_cost,omitempty"`
 }
 
 func (h *inventoryHandler) updateIngredient(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +120,7 @@ func (h *inventoryHandler) updateIngredient(w http.ResponseWriter, r *http.Reque
 		mw.Error(w, badRequestf("invalid JSON"))
 		return
 	}
+	claims, _ := mw.ClaimsFrom(r.Context())
 	item, err := h.ing.Update(r.Context(), service.UpdateIngredientInput{
 		ID:                   id,
 		Name:                 req.Name,
@@ -124,6 +129,9 @@ func (h *inventoryHandler) updateIngredient(w http.ResponseWriter, r *http.Reque
 		DefaultShelfLifeDays: req.DefaultShelfLifeDays,
 		MinStockAlert:        req.MinStockAlert,
 		IsActive:             req.IsActive,
+		CurrentQty:           req.CurrentQty,
+		CurrentAvgCost:       req.CurrentAvgCost,
+		CreatedBy:            claims.UserID,
 	})
 	if err != nil {
 		mw.Error(w, err)
