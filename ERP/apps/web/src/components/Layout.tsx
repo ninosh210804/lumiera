@@ -14,8 +14,18 @@ const NAV: NavItem[] = [
   { to: "/orders", icon: "🧾", label: "Заказы", allowedRoles: ["admin", "manager", "barista"] },
   { to: "/menu", icon: "☕", label: "Меню", allowedRoles: ["admin", "manager"] },
   { to: "/sales", icon: "🏷️", label: "Акции", allowedRoles: ["admin", "manager"] },
-  { to: "/inventory", icon: "📦", label: "Склад (просмотр)", allowedRoles: ["admin", "manager"] },
-  { to: "/warehouse", icon: "🏭", label: "Склад (управление)", allowedRoles: ["admin", "manager"] },
+  {
+    to: "/inventory",
+    icon: "📦",
+    label: "Склад (просмотр)",
+    allowedRoles: ["admin", "manager", "barista"],
+  },
+  {
+    to: "/warehouse",
+    icon: "🏭",
+    label: "Склад (управление)",
+    allowedRoles: ["admin", "manager", "barista"],
+  },
   { to: "/analytics", icon: "📈", label: "Аналитика", allowedRoles: ["admin", "manager"] },
   { to: "/settings", icon: "⚙️", label: "Настройки", allowedRoles: ["admin"] },
 ];
@@ -78,7 +88,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <button
-            onClick={() => { logout(); navigate("/login"); }}
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
             className="text-xs text-gray-400 hover:text-red-500 transition-colors"
           >
             Выйти из системы
