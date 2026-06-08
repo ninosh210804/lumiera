@@ -34,15 +34,78 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<RoleAwareFallback />} />
 
-      <Route path="/dashboard" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><DashboardPage /></RoleProtectedRoute>} />
-      <Route path="/orders"    element={<RoleProtectedRoute allowedRoles={["admin", "manager", "barista"]}><OrdersPage /></RoleProtectedRoute>} />
-      <Route path="/pos"       element={<RoleProtectedRoute allowedRoles={["barista", "manager", "admin"]}><POSPage /></RoleProtectedRoute>} />
-      <Route path="/menu"      element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><MenuPage /></RoleProtectedRoute>} />
-      <Route path="/inventory" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><InventoryPage /></RoleProtectedRoute>} />
-      <Route path="/warehouse" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><WarehousePage /></RoleProtectedRoute>} />
-      <Route path="/sales"     element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><SalesPage /></RoleProtectedRoute>} />
-      <Route path="/analytics" element={<RoleProtectedRoute allowedRoles={["admin", "manager"]}><AnalyticsPage /></RoleProtectedRoute>} />
-      <Route path="/settings"  element={<RoleProtectedRoute allowedRoles={["admin"]}><SettingsPage /></RoleProtectedRoute>} />
+      <Route
+        path="/dashboard"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
+            <DashboardPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager", "barista"]}>
+            <OrdersPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/pos"
+        element={
+          <RoleProtectedRoute allowedRoles={["barista", "manager", "admin"]}>
+            <POSPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/menu"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
+            <MenuPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager", "barista"]}>
+            <InventoryPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/warehouse"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager", "barista"]}>
+            <WarehousePage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/sales"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
+            <SalesPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
+            <AnalyticsPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin"]}>
+            <SettingsPage />
+          </RoleProtectedRoute>
+        }
+      />
 
       <Route path="*" element={<RoleAwareFallback />} />
     </Routes>
