@@ -157,9 +157,9 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 			r.Use(mw.RequireAuth)
 			r.Get("/movements", sh.listMovements)
 			r.Get("/counts", sh.listCounts)
-			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager)).Post("/write-off", sh.writeOff)
-			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager)).Post("/receive", sh.receiveStock)
-			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager)).Post("/count", sh.createCount)
+			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager, domain.RoleBarista)).Post("/write-off", sh.writeOff)
+			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager, domain.RoleBarista)).Post("/receive", sh.receiveStock)
+			r.With(mw.RequireRole(domain.RoleAdmin, domain.RoleManager, domain.RoleBarista)).Post("/count", sh.createCount)
 		})
 
 		// Suppliers
