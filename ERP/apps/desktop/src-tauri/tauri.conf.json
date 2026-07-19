@@ -1,10 +1,10 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "build": {
-    "beforeDevCommand": "cd ../web && npm run dev",
-    "beforeBuildCommand": "cd ../web && npm run build",
-    "devPath": "http://localhost:5173",
-    "distDir": "../web/dist"
+    "beforeDevCommand": "cd ../web && pnpm dev",
+    "beforeBuildCommand": "cd ../web && pnpm build",
+    "devPath": "http://localhost:3000",
+    "distDir": "../../web/dist"
   },
   "package": {
     "productName": "Coffeeshop ERP",
@@ -20,7 +20,7 @@
       "http": {
         "all": true,
         "request": true,
-        "scope": ["http://localhost:*", "https://**"]
+        "scope": ["http://localhost", "https://**"]
       },
       "notification": {
         "all": true
@@ -30,14 +30,7 @@
       "active": true,
       "targets": "all",
       "identifier": "kz.coffeeshop.erp",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "externalBin": ["binaries/erp-server"],
+      "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"],
       "resources": [],
       "longDescription": "Coffee Shop ERP — offline-first POS and management system",
       "shortDescription": "Coffeeshop ERP",
@@ -57,10 +50,6 @@
         "resizable": true,
         "fullscreen": false
       }
-    ],
-    "sidecar": {
-      "args": ["--env", "prod", "--port", "7171"],
-      "name": "binaries/erp-server"
-    }
+    ]
   }
 }

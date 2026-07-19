@@ -95,6 +95,14 @@ type ReceiptDTO struct {
 	LoyaltyEarned float64          `json:"loyalty_earned"`
 }
 
+type CustomerProfileDTO struct {
+	Phone          string  `json:"phone"`
+	CustomerFound  bool    `json:"customer_found"`
+	Balance        float64 `json:"balance"`
+	FreeDrinksLeft int     `json:"free_drinks_left"`
+	CoffeePunches  int     `json:"coffee_punches"`
+}
+
 // ─── Inputs ───────────────────────────────────────────────────────────────────
 
 type CreateOrderInput struct {
@@ -103,6 +111,7 @@ type CreateOrderInput struct {
 	BaristaID          uuid.UUID
 	CustomerPhone      string
 	LoyaltyPointsToUse float64
+	ManualDiscountPct  float64 // per-order barista discount (e.g. paper ticket for 10% off)
 	ClientUUID         uuid.UUID
 	Items              []OrderItemInput
 	Payments           []PaymentInput
@@ -292,7 +301,7 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		custState = st
 	}
 
-	disc := computeDiscounts(subtotal, coffeeUnitPrices, custState, cfg, in.LoyaltyPointsToUse)
+	disc := computeDiscounts(subtotal, coffeeUnitPrices, custState, cfg, in.LoyaltyPointsToUse, in.ManualDiscountPct)
 	if in.Comp {
 		disc = discountResult{Total: subtotal}
 	}
@@ -481,11 +490,31 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 	return &dto, nil
 }
 
+// CustomerProfile returns the current bonus balance and loyalty state for a phone number.
+func (svc *OrderService) CustomerProfile(ctx context.Context, phone string) (*CustomerProfileDTO, error) {
+	phone = normalizePhone(phone)
+	if phone == "" {
+		return &CustomerProfileDTO{}, nil
+	}
+	st, err := lookupLoyalty(ctx, svc.q, phone)
+	if err != nil {
+		return nil, fmt.Errorf("lookup loyalty: %w", err)
+	}
+	return &CustomerProfileDTO{
+		Phone:          phone,
+		CustomerFound:  st.found,
+		Balance:        st.pointsBalance,
+		FreeDrinksLeft: st.freeDrinksLeft,
+		CoffeePunches:  st.coffeePunches,
+	}, nil
+}
+
 // ─── Quote ────────────────────────────────────────────────────────────────────
 
 type QuoteInput struct {
 	CustomerPhone      string
 	LoyaltyPointsToUse float64
+	ManualDiscountPct  float64
 	Items              []OrderItemInput
 }
 
@@ -493,6 +522,7 @@ type QuoteInput struct {
 type QuoteDTO struct {
 	Subtotal           float64 `json:"subtotal"`
 	PromoDiscount      float64 `json:"promo_discount"`
+	ManualDiscount     float64 `json:"manual_discount"`
 	FreeCoffeeDiscount float64 `json:"free_coffee_discount"`
 	FreeCoffeesApplied int     `json:"free_coffees_applied"`
 	DiscountTotal      float64 `json:"discount_total"`
@@ -551,10 +581,11 @@ func (svc *OrderService) Quote(ctx context.Context, in QuoteInput) (*QuoteDTO, e
 		}
 	}
 
-	disc := computeDiscounts(subtotal, coffeeUnitPrices, st, cfg, in.LoyaltyPointsToUse)
+	disc := computeDiscounts(subtotal, coffeeUnitPrices, st, cfg, in.LoyaltyPointsToUse, in.ManualDiscountPct)
 	return &QuoteDTO{
 		Subtotal:           round2(subtotal),
 		PromoDiscount:      disc.PromoDiscount,
+		ManualDiscount:     disc.ManualDiscount,
 		FreeCoffeeDiscount: disc.FreeCoffeeDiscount,
 		FreeCoffeesApplied: disc.FreeCoffeesApplied,
 		DiscountTotal:      disc.DiscountTotal,
@@ -914,6 +945,7 @@ func loadPaymentMethods(ctx context.Context, q *pgdb.Queries) (map[string]pmInfo
 // getOrCreateCustomer ensures a customer + loyalty account exist for the phone
 // and returns the customer id, loyalty account id, and the account snapshot.
 func getOrCreateCustomer(ctx context.Context, q *pgdb.Queries, phone string) (uuid.UUID, uuid.UUID, loyaltyState, error) {
+	phone = normalizePhone(phone)
 	cust, err := q.GetCustomerByPhone(ctx, phone)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {

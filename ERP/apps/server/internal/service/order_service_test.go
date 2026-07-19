@@ -12,10 +12,10 @@ import (
 
 func TestPaymentSumValidation(t *testing.T) {
 	cases := []struct {
-		name      string
-		total     float64
-		payments  []float64
-		wantErr   bool
+		name     string
+		total    float64
+		payments []float64
+		wantErr  bool
 	}{
 		{
 			name:     "exact match single payment",
@@ -114,4 +114,10 @@ func TestReceiptNoFallback(t *testing.T) {
 	assert.Equal(t, "?", check(""))
 	assert.Equal(t, "?", check(nil))
 	assert.Equal(t, "?", check(42))
+}
+
+func TestNormalizePhone(t *testing.T) {
+	assert.Equal(t, "77001234567", normalizePhone("+7 (700) 123-45-67"))
+	assert.Equal(t, "77001234567", normalizePhone("8 700 123 45 67"))
+	assert.Equal(t, "", normalizePhone("   "))
 }

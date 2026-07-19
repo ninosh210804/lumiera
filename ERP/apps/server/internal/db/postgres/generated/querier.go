@@ -23,6 +23,7 @@ type Querier interface {
 	CloseShift(ctx context.Context, arg CloseShiftParams) (Shift, error)
 	CloseTimeEntry(ctx context.Context, id pgtype.UUID) (TimeEntry, error)
 	CompleteInventoryCount(ctx context.Context, id pgtype.UUID) (InventoryCount, error)
+	CompleteOnlineOrder(ctx context.Context, arg CompleteOnlineOrderParams) (OnlineOrder, error)
 	CreateCashDrawerOperation(ctx context.Context, arg CreateCashDrawerOperationParams) (CashDrawerOperation, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
@@ -37,6 +38,8 @@ type Querier interface {
 	CreateLoyaltyTransaction(ctx context.Context, arg CreateLoyaltyTransactionParams) (LoyaltyTransaction, error)
 	CreateModifierGroup(ctx context.Context, arg CreateModifierGroupParams) (ProductModifierGroup, error)
 	CreateModifierOption(ctx context.Context, arg CreateModifierOptionParams) (ModifierOption, error)
+	CreateOnlineOrder(ctx context.Context, arg CreateOnlineOrderParams) (OnlineOrder, error)
+	CreateOnlineOrderItem(ctx context.Context, arg CreateOnlineOrderItemParams) (OnlineOrderItem, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
 	CreateOrderItemModifier(ctx context.Context, arg CreateOrderItemModifierParams) (OrderItemModifier, error)
@@ -82,6 +85,8 @@ type Querier interface {
 	GetModifierGroups(ctx context.Context, productID pgtype.UUID) ([]GetModifierGroupsRow, error)
 	GetModifierOption(ctx context.Context, id pgtype.UUID) (GetModifierOptionRow, error)
 	GetNextReceiptNo(ctx context.Context, locationID pgtype.UUID) (interface{}, error)
+	GetOnlineOrder(ctx context.Context, id pgtype.UUID) (OnlineOrder, error)
+	GetOnlineOrderItems(ctx context.Context, onlineOrderID pgtype.UUID) ([]GetOnlineOrderItemsRow, error)
 	GetOpenTimeEntry(ctx context.Context, arg GetOpenTimeEntryParams) (TimeEntry, error)
 	GetOrder(ctx context.Context, id pgtype.UUID) (Order, error)
 	GetOrderByClientUUID(ctx context.Context, clientUuid pgtype.UUID) (Order, error)
@@ -114,6 +119,7 @@ type Querier interface {
 	LinkProductRecipe(ctx context.Context, arg LinkProductRecipeParams) error
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListActiveMenuProducts(ctx context.Context, locationID pgtype.UUID) ([]ListActiveMenuProductsRow, error)
+	ListActiveOnlineOrders(ctx context.Context, locationID pgtype.UUID) ([]OnlineOrder, error)
 	ListActiveProducts(ctx context.Context, locationID pgtype.UUID) ([]ListActiveProductsRow, error)
 	ListBaristasByLocation(ctx context.Context, defaultLocationID pgtype.UUID) ([]ListBaristasByLocationRow, error)
 	ListCashDrawerOperations(ctx context.Context, shiftID pgtype.UUID) ([]CashDrawerOperation, error)
@@ -162,6 +168,7 @@ type Querier interface {
 	// товар" dialog so admins can correct mistyped purchase prices (#3 / #5).
 	SetIngredientCost(ctx context.Context, arg SetIngredientCostParams) (Ingredient, error)
 	SetLoyaltyRule(ctx context.Context, arg SetLoyaltyRuleParams) (LoyaltyRule, error)
+	SetOnlineOrderStatus(ctx context.Context, arg SetOnlineOrderStatusParams) (OnlineOrder, error)
 	SetProductStopList(ctx context.Context, arg SetProductStopListParams) error
 	SetSaleEventActive(ctx context.Context, arg SetSaleEventActiveParams) (SaleEvent, error)
 	SoftDeleteCategory(ctx context.Context, id pgtype.UUID) error

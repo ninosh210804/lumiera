@@ -6,6 +6,9 @@ import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
 import POSPage from "./pages/POSPage";
 import MenuPage from "./pages/MenuPage";
+import ClientsPage from "./pages/ClientsPage";
+import DeliveryPage from "./pages/DeliveryPage";
+import OnlineOrdersPage from "./pages/OnlineOrdersPage";
 import InventoryPage from "./pages/InventoryPage";
 import WarehousePage from "./pages/WarehousePage";
 import SalesPage from "./pages/SalesPage";
@@ -32,6 +35,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Public customer delivery app (opened via QR: /order?location=<uuid>) */}
+      <Route path="/order" element={<DeliveryPage />} />
       <Route path="/" element={<RoleAwareFallback />} />
 
       <Route
@@ -63,6 +68,22 @@ export default function App() {
         element={
           <RoleProtectedRoute allowedRoles={["admin", "manager"]}>
             <MenuPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/clients"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager", "barista"]}>
+            <ClientsPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="/online-orders"
+        element={
+          <RoleProtectedRoute allowedRoles={["admin", "manager", "barista"]}>
+            <OnlineOrdersPage />
           </RoleProtectedRoute>
         }
       />

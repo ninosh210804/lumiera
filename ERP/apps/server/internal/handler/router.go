@@ -43,6 +43,7 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 		ingSvc := service.NewIngredientService(q)
 		recipeSvc := service.NewRecipeService(q)
 		orderSvc := service.NewOrderService(pool, q)
+		onlineOrderSvc := service.NewOnlineOrderService(pool, q, orderSvc)
 		stockSvc := service.NewStockService(pool, q)
 		shiftSvc := service.NewShiftService(q)
 		analyticsSvc := service.NewAnalyticsService(q)
@@ -52,6 +53,8 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 		ah := &authHandler{auth: authSvc}
 		uh := &usersHandler{users: userSvc}
 		mh := &menuHandler{menu: menuSvc}
+		ch := &clientsHandler{orders: orderSvc}
+		ooh := &onlineOrdersHandler{online: onlineOrderSvc}
 		ih := &inventoryHandler{ing: ingSvc}
 		rh := &recipesHandler{recipes: recipeSvc}
 		oh := &ordersHandler{orders: orderSvc}
@@ -79,6 +82,11 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 
 		// Public menu endpoint for POS (active products only, no auth required)
 		r.Get("/menu", mh.listMenu)
+		r.Get("/clients/profile", ch.profile)
+
+		// Public customer delivery app: place an order + poll its status (no auth).
+		r.Post("/clients/orders", ooh.place)
+		r.Get("/clients/orders/{id}", ooh.track)
 
 		// Categories (admin/manager write, all authenticated read)
 		r.Route("/categories", func(r chi.Router) {
@@ -186,6 +194,16 @@ func NewRouter(pool *pgxpool.Pool, cfg *config.Config, acctSvc AccountingService
 				r.With(mw.RequireRole(domain.RoleAdmin)).Post("/soft-delete", oh.softDelete)
 				r.With(mw.RequireRole(domain.RoleAdmin)).Delete("/", oh.hardDelete)
 			})
+		})
+
+		// Online / delivery orders queue (barista + manager + admin)
+		r.Route("/online-orders", func(r chi.Router) {
+			r.Use(mw.Authenticate(cfg.JWT.Secret))
+			r.Use(mw.RequireAuth)
+			r.Use(mw.RequireRole(domain.RoleAdmin, domain.RoleManager, domain.RoleBarista))
+			r.Get("/", ooh.list)
+			r.Post("/{id}/status", ooh.setStatus)
+			r.Post("/{id}/complete", ooh.complete)
 		})
 
 		// Sale events (read by all staff for POS pricing; write = admin/manager)

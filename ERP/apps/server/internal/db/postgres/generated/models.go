@@ -250,6 +250,31 @@ type MvSalesHeatmap struct {
 	Margin      int64           `db:"margin" json:"margin"`
 }
 
+type OnlineOrder struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	LocationID     pgtype.UUID        `db:"location_id" json:"location_id"`
+	CustomerID     pgtype.UUID        `db:"customer_id" json:"customer_id"`
+	CustomerPhone  string             `db:"customer_phone" json:"customer_phone"`
+	Status         string             `db:"status" json:"status"`
+	DeliveryOffice string             `db:"delivery_office" json:"delivery_office"`
+	DeliveryNote   string             `db:"delivery_note" json:"delivery_note"`
+	Subtotal       pgtype.Numeric     `db:"subtotal" json:"subtotal"`
+	Total          pgtype.Numeric     `db:"total" json:"total"`
+	OrderID        pgtype.UUID        `db:"order_id" json:"order_id"`
+	AcceptedBy     pgtype.UUID        `db:"accepted_by" json:"accepted_by"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type OnlineOrderItem struct {
+	ID                pgtype.UUID        `db:"id" json:"id"`
+	OnlineOrderID     pgtype.UUID        `db:"online_order_id" json:"online_order_id"`
+	ProductID         pgtype.UUID        `db:"product_id" json:"product_id"`
+	Qty               pgtype.Numeric     `db:"qty" json:"qty"`
+	UnitPriceSnapshot pgtype.Numeric     `db:"unit_price_snapshot" json:"unit_price_snapshot"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type Order struct {
 	ID                pgtype.UUID        `db:"id" json:"id"`
 	LocationID        pgtype.UUID        `db:"location_id" json:"location_id"`

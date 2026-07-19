@@ -6,6 +6,8 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strings"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 
@@ -70,17 +72,37 @@ func loadLoyaltyConfig(ctx context.Context, q *pgdb.Queries) (LoyaltyConfig, err
 
 // loyaltyState is a customer's loyalty account snapshot used for pricing.
 type loyaltyState struct {
-	found            bool
-	customerID       [16]byte
-	pointsBalance    float64
-	freeDrinksLeft   int
-	coffeePunches    int
+	found          bool
+	customerID     [16]byte
+	pointsBalance  float64
+	freeDrinksLeft int
+	coffeePunches  int
+}
+
+func normalizePhone(phone string) string {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return ""
+	}
+
+	var digits strings.Builder
+	for _, r := range phone {
+		if unicode.IsDigit(r) {
+			digits.WriteRune(r)
+		}
+	}
+	value := digits.String()
+	if len(value) == 11 && strings.HasPrefix(value, "8") {
+		value = "7" + value[1:]
+	}
+	return value
 }
 
 // lookupLoyalty fetches a customer's account by phone without creating anything
 // (used by quotes). Returns found=false when the customer is new.
 func lookupLoyalty(ctx context.Context, q *pgdb.Queries, phone string) (loyaltyState, error) {
 	var st loyaltyState
+	phone = normalizePhone(phone)
 	cust, err := q.GetCustomerByPhone(ctx, phone)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -108,10 +130,11 @@ func lookupLoyalty(ctx context.Context, q *pgdb.Queries, phone string) (loyaltyS
 // discountResult is the outcome of applying loyalty rules to an order.
 type discountResult struct {
 	PromoDiscount      float64
+	ManualDiscount     float64 // per-order barista discount (e.g. paper ticket)
 	FreeCoffeeDiscount float64
 	FreeCoffeesApplied int
 	PointsUsed         float64
-	DiscountTotal      float64 // promo + free coffee
+	DiscountTotal      float64 // promo + manual + free coffee
 	Total              float64
 	// post-order account state (only meaningful for registered customers)
 	NewFreeDrinksLeft int
@@ -120,11 +143,13 @@ type discountResult struct {
 }
 
 // computeDiscounts applies the free-Nth-coffee and global promo rules.
-//   subtotal:         sum of line totals
-//   coffeeUnitPrices: per-unit prices of qualifying ("coffee") units in the cart
-//   st:               customer loyalty snapshot (zero value = walk-in)
-//   pointsToUse:      points the customer wants to redeem (1 point = 1 ₸)
-func computeDiscounts(subtotal float64, coffeeUnitPrices []float64, st loyaltyState, cfg LoyaltyConfig, pointsToUse float64) discountResult {
+//
+//	subtotal:         sum of line totals
+//	coffeeUnitPrices: per-unit prices of qualifying ("coffee") units in the cart
+//	st:               customer loyalty snapshot (zero value = walk-in)
+//	pointsToUse:      points the customer wants to redeem (1 point = 1 ₸)
+//	manualPct:        per-order barista discount percent (e.g. paper ticket); 0 = none
+func computeDiscounts(subtotal float64, coffeeUnitPrices []float64, st loyaltyState, cfg LoyaltyConfig, pointsToUse, manualPct float64) discountResult {
 	var res discountResult
 
 	// Free coffee: redeem drinks earned on previous visits, applied to the most
@@ -156,13 +181,23 @@ func computeDiscounts(subtotal float64, coffeeUnitPrices []float64, st loyaltySt
 	res.NewCoffeePunches = newPunches
 	res.NewFreeDrinksLeft = st.freeDrinksLeft - freeApplied + earnedFree
 
-	// Promo: percent off the payable amount (after free coffee).
+	// Promo + manual (ticket) discount: percent off the payable amount (after
+	// free coffee). Both apply to the same base so a customer with a ticket still
+	// benefits from an active global promo.
 	payable := subtotal - res.FreeCoffeeDiscount
-	if cfg.PromoActive && cfg.PromoPct > 0 && payable > 0 {
-		res.PromoDiscount = round2(payable * cfg.PromoPct / 100)
+	if payable > 0 {
+		if cfg.PromoActive && cfg.PromoPct > 0 {
+			res.PromoDiscount = round2(payable * cfg.PromoPct / 100)
+		}
+		if manualPct > 0 {
+			res.ManualDiscount = round2(payable * manualPct / 100)
+		}
 	}
 
-	res.DiscountTotal = round2(res.PromoDiscount + res.FreeCoffeeDiscount)
+	res.DiscountTotal = round2(res.PromoDiscount + res.ManualDiscount + res.FreeCoffeeDiscount)
+	if res.DiscountTotal > subtotal {
+		res.DiscountTotal = subtotal // never discount below zero
+	}
 
 	// Points redemption, capped by balance and remaining payable amount.
 	remaining := subtotal - res.DiscountTotal

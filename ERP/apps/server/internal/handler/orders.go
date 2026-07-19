@@ -32,6 +32,7 @@ type createOrderRequest struct {
 	Payments           []paymentRequest   `json:"payments"`
 	CustomerPhone      string             `json:"customer_phone"`
 	LoyaltyPointsToUse float64            `json:"loyalty_points_to_use"`
+	ManualDiscountPct  float64            `json:"manual_discount_pct"`
 	ClientUUID         string             `json:"client_uuid"`
 	ShiftID            string             `json:"shift_id"`
 	Comp               bool               `json:"comp"`
@@ -81,6 +82,7 @@ func (h *ordersHandler) create(w http.ResponseWriter, r *http.Request) {
 		BaristaID:          claims.UserID,
 		CustomerPhone:      req.CustomerPhone,
 		LoyaltyPointsToUse: req.LoyaltyPointsToUse,
+		ManualDiscountPct:  req.ManualDiscountPct,
 		Comp:               req.Comp,
 		CompRecipient:      req.CompRecipient,
 	}
@@ -151,6 +153,7 @@ type quoteRequest struct {
 	Items              []orderItemRequest `json:"items"`
 	CustomerPhone      string             `json:"customer_phone"`
 	LoyaltyPointsToUse float64            `json:"loyalty_points_to_use"`
+	ManualDiscountPct  float64            `json:"manual_discount_pct"`
 }
 
 func (h *ordersHandler) quote(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +165,7 @@ func (h *ordersHandler) quote(w http.ResponseWriter, r *http.Request) {
 	in := service.QuoteInput{
 		CustomerPhone:      req.CustomerPhone,
 		LoyaltyPointsToUse: req.LoyaltyPointsToUse,
+		ManualDiscountPct:  req.ManualDiscountPct,
 	}
 	for _, item := range req.Items {
 		productID, err := uuid.Parse(item.ProductID)

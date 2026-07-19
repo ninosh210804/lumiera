@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 interface QuoteDTO {
   subtotal: number;
   promo_discount: number;
+  manual_discount: number;
   free_coffee_discount: number;
   free_coffees_applied: number;
   discount_total: number;
@@ -55,11 +56,15 @@ interface CreateOrderRequest {
   }>;
   customer_phone: string;
   loyalty_points_to_use: number;
+  manual_discount_pct: number;
   client_uuid: string;
   shift_id: string;
   comp?: boolean;
   comp_recipient?: string;
 }
+
+// Fixed discount applied when a customer presents a paper "-10%" ticket.
+const TICKET_DISCOUNT_PCT = 10;
 
 // Who takes products off the shelf without paying. Tracked per recipient in
 // Analytics. Extend this list if more people start taking stock on credit.
@@ -72,6 +77,9 @@ export default function POSPage() {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [customerPhone, setCustomerPhone] = useState("");
+  const [useBonuses, setUseBonuses] = useState(false);
+  const [bonusAmount, setBonusAmount] = useState(0);
+  const [ticketDiscount, setTicketDiscount] = useState(false);
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [openShiftError, setOpenShiftError] = useState("");
@@ -119,11 +127,19 @@ export default function POSPage() {
 
   const createOrderMutation = useMutation({
     mutationFn: (data: CreateOrderRequest) => api.post("/orders", data),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const earned = res.data?.data?.loyalty_earned ?? 0;
       setCart([]);
       setCustomerPhone("");
+      setUseBonuses(false);
+      setBonusAmount(0);
+      setTicketDiscount(false);
       qc.invalidateQueries({ queryKey: ["active-shift"] });
-      alert("Заказ создан успешно!");
+      alert(
+        earned > 0
+          ? `Заказ создан успешно! Начислено ${earned.toLocaleString("ru-RU")} бонусов`
+          : "Заказ создан успешно!"
+      );
     },
     onError: (err: unknown) => {
       const msg =
@@ -139,6 +155,11 @@ export default function POSPage() {
     const t = setTimeout(() => setDebouncedPhone(customerPhone), 350);
     return () => clearTimeout(t);
   }, [customerPhone]);
+
+  useEffect(() => {
+    setUseBonuses(false);
+    setBonusAmount(0);
+  }, [debouncedPhone]);
 
   const subtotal = cart.reduce((s, item) => s + item.line_total, 0);
 
@@ -158,18 +179,32 @@ export default function POSPage() {
     qty: i.qty,
     modifier_option_ids: [] as string[],
   }));
+  const manualDiscountPct = ticketDiscount ? TICKET_DISCOUNT_PCT : 0;
   const { data: quote } = useQuery<QuoteDTO>({
-    queryKey: ["order-quote", quoteItems, debouncedPhone],
+    queryKey: ["order-quote", quoteItems, debouncedPhone, bonusAmount, manualDiscountPct],
     queryFn: () =>
       api
         .post("/orders/quote", {
           items: quoteItems,
           customer_phone: debouncedPhone,
-          loyalty_points_to_use: 0,
+          loyalty_points_to_use: bonusAmount,
+          manual_discount_pct: manualDiscountPct,
         })
         .then((r) => r.data.data),
     enabled: cart.length > 0 || debouncedPhone.length >= 4,
   });
+
+  useEffect(() => {
+    if (!useBonuses) {
+      setBonusAmount(0);
+      return;
+    }
+    if (!quote?.customer_found || (quote.points_balance ?? 0) <= 0) {
+      setBonusAmount(0);
+      return;
+    }
+    setBonusAmount(Math.min(quote.points_balance, Math.max(quote.total, 0)));
+  }, [quote?.customer_found, quote?.points_balance, quote?.total, useBonuses]);
 
   const total = quote?.total ?? subtotal;
 
@@ -234,7 +269,8 @@ export default function POSPage() {
         },
       ],
       customer_phone: customerPhone,
-      loyalty_points_to_use: 0,
+      loyalty_points_to_use: useBonuses ? bonusAmount : 0,
+      manual_discount_pct: manualDiscountPct,
       client_uuid: crypto.randomUUID(),
       shift_id: activeShift?.id ?? "",
     };
@@ -270,6 +306,7 @@ export default function POSPage() {
       payments: [],
       customer_phone: "",
       loyalty_points_to_use: 0,
+      manual_discount_pct: 0,
       client_uuid: crypto.randomUUID(),
       shift_id: activeShift?.id ?? "",
       comp: true,
@@ -465,15 +502,49 @@ export default function POSPage() {
               className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 text-sm"
             />
             {quote?.customer_found && (
-              <div className="mt-2 flex items-center gap-2 text-xs">
-                <span className="bg-amber-500/15 text-amber-300 px-2 py-1 rounded-md font-medium">
-                  ☕ Бесплатных: {quote.free_drinks_left}
-                </span>
-                <span className="bg-sky-500/15 text-sky-300 px-2 py-1 rounded-md font-medium">
-                  ★ Баллы: {quote.points_balance.toLocaleString("ru-RU")}
-                </span>
+              <div className="mt-2 flex flex-col gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-500/15 text-amber-300 px-2 py-1 rounded-md font-medium">
+                    ☕ Бесплатных: {quote.free_drinks_left}
+                  </span>
+                  <span className="bg-sky-500/15 text-sky-300 px-2 py-1 rounded-md font-medium">
+                    💰 Бонусы: {quote.points_balance.toLocaleString("ru-RU")}
+                  </span>
+                </div>
+                {quote.points_balance > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!quote.customer_found || quote.points_balance <= 0) return;
+                      setUseBonuses((prev) => !prev);
+                    }}
+                    className={`w-full rounded-md border px-2 py-1.5 text-left text-xs font-medium transition ${
+                      useBonuses
+                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                        : "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
+                    }`}
+                  >
+                    {useBonuses
+                      ? `✅ Используются бонусы: ${bonusAmount.toLocaleString("ru-RU")} ₸`
+                      : "Использовать бонусы"}
+                  </button>
+                )}
               </div>
             )}
+            {/* Paper "-10%" ticket: per-order discount the barista toggles on. */}
+            <button
+              type="button"
+              onClick={() => setTicketDiscount((prev) => !prev)}
+              className={`mt-2 w-full rounded-md border px-2 py-1.5 text-left text-xs font-medium transition ${
+                ticketDiscount
+                  ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                  : "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
+              }`}
+            >
+              {ticketDiscount
+                ? `✅ Скидка по талону −${TICKET_DISCOUNT_PCT}%`
+                : `🎟 Скидка по талону −${TICKET_DISCOUNT_PCT}%`}
+            </button>
           </div>
 
           {/* Totals */}
@@ -497,6 +568,18 @@ export default function POSPage() {
               <div className="flex justify-between text-emerald-300">
                 <span>Скидка −{quote.promo_percent}%:</span>
                 <span>−{quote.promo_discount.toLocaleString("ru-RU")} ₸</span>
+              </div>
+            )}
+            {!!quote && quote.manual_discount > 0 && (
+              <div className="flex justify-between text-emerald-300">
+                <span>Скидка по талону −{TICKET_DISCOUNT_PCT}%:</span>
+                <span>−{quote.manual_discount.toLocaleString("ru-RU")} ₸</span>
+              </div>
+            )}
+            {!!quote && quote.loyalty_points_used > 0 && (
+              <div className="flex justify-between text-sky-300">
+                <span>Бонусы к оплате:</span>
+                <span>−{quote.loyalty_points_used.toLocaleString("ru-RU")} ₸</span>
               </div>
             )}
             <div className="border-t border-gray-600 pt-2 flex justify-between text-lg font-bold text-white">

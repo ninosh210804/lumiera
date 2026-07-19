@@ -10,8 +10,15 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: "/dashboard", icon: "📊", label: "Дашборд", allowedRoles: ["admin", "manager"] },
+  { to: "/clients", icon: "👤", label: "Клиенты", allowedRoles: ["admin", "manager", "barista"] },
   { to: "/pos", icon: "🛒", label: "Касса (POS)", allowedRoles: ["barista", "manager", "admin"] },
   { to: "/orders", icon: "🧾", label: "Заказы", allowedRoles: ["admin", "manager", "barista"] },
+  {
+    to: "/online-orders",
+    icon: "🛵",
+    label: "Онлайн-заказы",
+    allowedRoles: ["admin", "manager", "barista"],
+  },
   { to: "/menu", icon: "☕", label: "Меню", allowedRoles: ["admin", "manager"] },
   { to: "/sales", icon: "🏷️", label: "Акции", allowedRoles: ["admin", "manager"] },
   {
