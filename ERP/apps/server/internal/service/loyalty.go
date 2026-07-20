@@ -32,7 +32,7 @@ type LoyaltyConfig struct {
 
 // loadLoyaltyConfig resolves rule rows into a LoyaltyConfig with sane defaults.
 func loadLoyaltyConfig(ctx context.Context, q *pgdb.Queries) (LoyaltyConfig, error) {
-	cfg := LoyaltyConfig{EveryN: 7, FreeCategory: "Кофе", PromoPct: 10, EarnPct: 1}
+	cfg := LoyaltyConfig{EveryN: 7, FreeCategory: "Кофе", PromoPct: 10, EarnPct: 5}
 	rules, err := q.GetLoyaltyRules(ctx)
 	if err != nil {
 		return cfg, err
