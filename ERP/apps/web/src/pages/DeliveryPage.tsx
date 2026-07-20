@@ -16,6 +16,7 @@ interface ClientProfileDTO {
   customer_found: boolean;
   balance: number;
   free_drinks_left: number;
+  coffee_punches: number;
 }
 
 interface OnlineOrderItemDTO {
@@ -56,6 +57,7 @@ export default function DeliveryPage() {
   const [trackingId, setTrackingId] = useState<string | null>(() =>
     localStorage.getItem(TRACK_KEY)
   );
+  const [view, setView] = useState<"menu" | "account">("menu");
 
   const { data: menu = [] } = useQuery<MenuProductDTO[]>({
     queryKey: ["delivery-menu", locationId],
@@ -260,6 +262,45 @@ export default function DeliveryPage() {
     );
   }
 
+  // ── Account: bonus balance + free coffees ───────────────────────────────
+  if (view === "account") {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white pb-24">
+        <div className="mx-auto max-w-2xl p-4">
+          <h1 className="text-xl font-bold">Мой счёт</h1>
+          <p className="text-xs text-gray-400">{phone}</p>
+
+          {profile?.customer_found ? (
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-5">
+                <p className="text-sm text-sky-300">Доступно бонусов</p>
+                <p className="mt-1 text-3xl font-bold text-sky-400">
+                  {profile.balance.toLocaleString("ru-RU")} ₸
+                </p>
+              </div>
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
+                <p className="text-sm text-amber-300">Бесплатных кофе</p>
+                <p className="mt-1 text-3xl font-bold text-amber-400">{profile.free_drinks_left}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+                <p className="text-sm text-gray-400">Серийность кофе</p>
+                <p className="mt-1 text-2xl font-semibold text-gray-200">
+                  {profile.coffee_punches} шт.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-2xl border border-dashed border-gray-700 bg-gray-900/50 p-6 text-center text-sm text-gray-400">
+              Бонусов пока нет — они появятся после первого заказа.
+            </div>
+          )}
+        </div>
+
+        <DeliveryTabBar view={view} setView={setView} />
+      </div>
+    );
+  }
+
   // ── Shop: menu + cart ────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-950 text-white pb-40">
@@ -270,9 +311,12 @@ export default function DeliveryPage() {
             <p className="text-xs text-gray-400">{phone}</p>
           </div>
           {profile?.customer_found && (
-            <span className="rounded-md bg-sky-500/15 px-2 py-1 text-xs font-medium text-sky-300">
+            <button
+              onClick={() => setView("account")}
+              className="rounded-md bg-sky-500/15 px-2 py-1 text-xs font-medium text-sky-300 hover:bg-sky-500/25"
+            >
               💰 Бонусы: {profile.balance.toLocaleString("ru-RU")}
-            </span>
+            </button>
           )}
         </div>
 
@@ -364,6 +408,39 @@ export default function DeliveryPage() {
           </div>
         </div>
       )}
+
+      {cartLines.length === 0 && <DeliveryTabBar view={view} setView={setView} />}
+    </div>
+  );
+}
+
+function DeliveryTabBar({
+  view,
+  setView,
+}: {
+  view: "menu" | "account";
+  setView: (v: "menu" | "account") => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 border-t border-gray-800 bg-gray-900/95 backdrop-blur">
+      <div className="mx-auto flex max-w-2xl">
+        <button
+          onClick={() => setView("menu")}
+          className={`flex-1 py-3 text-center text-sm font-semibold transition ${
+            view === "menu" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          🛒 Меню
+        </button>
+        <button
+          onClick={() => setView("account")}
+          className={`flex-1 py-3 text-center text-sm font-semibold transition ${
+            view === "account" ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          💰 Мой счёт
+        </button>
+      </div>
     </div>
   );
 }
