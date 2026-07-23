@@ -471,10 +471,13 @@ func (svc *OrderService) CreateOrder(ctx context.Context, in CreateOrderInput) (
 		loyaltyEarned = disc.EarnedPoints
 
 		if loyaltyAccountID.Valid {
+			// kind must be one of the loyalty_transactions CHECK values
+			// ('earn','spend','adjust','gift'); using anything else violates the
+			// constraint and aborts the whole order transaction (→ 500).
 			recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "earn", disc.EarnedPoints, receiptNo)
-			recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "redeem", -disc.PointsUsed, receiptNo)
+			recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "spend", -disc.PointsUsed, receiptNo)
 			if disc.FreeCoffeesApplied > 0 {
-				recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "free_drink", 0, receiptNo)
+				recordLoyaltyTx(ctx, q, loyaltyAccountID, orderID, "gift", 0, receiptNo)
 			}
 		}
 	}
@@ -984,7 +987,7 @@ func recordLoyaltyTx(ctx context.Context, q *pgdb.Queries, acctID, orderID pgtyp
 	if kind == "earn" && pointsDelta == 0 {
 		return
 	}
-	if kind == "redeem" && pointsDelta == 0 {
+	if kind == "spend" && pointsDelta == 0 {
 		return
 	}
 	note := fmt.Sprintf("Чек %s", receiptNo)
